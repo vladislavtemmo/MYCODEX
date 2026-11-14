@@ -115,3 +115,11 @@
 - Windows Release: swift build -c release — успешно.
 - Реальная цепочка Swift -> C ABI -> OpenVPN 3 Core ещё не проверена.
 - Apple NetworkExtension и VPN-туннель не реализованы.
+
+## 2026-11-15 — Windows: Swift -> C ABI -> OpenVPN 3 Core
+- Собрана динамическая библиотека mycodex_core.dll с настоящим OpenVPN 3 Core.
+- Swift 6.4.2 успешно вызвал OpenVPNNativeBridge.validateProfile через C ABI.
+- Результаты: SWIFT_CORE_LINKED=1, SWIFT_VALID=1, SWIFT_INVALID_REJECTED=1, SWIFT_TO_OPENVPN3_PASSED.
+- Интеграционная сборка находится в tools/windows-swift-core-probe.
+- Обычный SwiftPM пока использует резервный мост без ядра.
+- Реальное VPN-подключение, Apple NetworkExtension и Xcode пока не проверены.

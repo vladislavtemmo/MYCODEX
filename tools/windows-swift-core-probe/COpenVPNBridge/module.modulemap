@@ -1,0 +1,5 @@
+module COpenVPNBridge {
+  header "MYCODEXBridge.h"
+  link "mycodex_core"
+  export *
+}
