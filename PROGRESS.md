@@ -100,3 +100,10 @@
 - Проверено: ABI=1, CORE_LINKED=0, PROFILE_RESULT=-2, EMPTY_RESULT=-1.
 - Подробности: docs/WINDOWS_CORE_VALIDATION.md.
 - Swift/Xcode/реальный VPN-туннель не проверены.
+
+
+### 2026-11-15 — Windows: проверка режима без ядра
+- Успешно собран резервный C ABI без MYCODEX_WITH_OPENVPN3.
+- Проверено: ABI=1, CORE_LINKED=0, PROFILE_RESULT=-2, EMPTY_RESULT=-1.
+- Подробности: docs/WINDOWS_CORE_VALIDATION.md.
+- Swift/Xcode/реальный VPN-туннель не проверены.
