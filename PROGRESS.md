@@ -107,3 +107,11 @@
 - Проверено: ABI=1, CORE_LINKED=0, PROFILE_RESULT=-2, EMPTY_RESULT=-1.
 - Подробности: docs/WINDOWS_CORE_VALIDATION.md.
 - Swift/Xcode/реальный VPN-туннель не проверены.
+
+## 2026-11-15 — Swift API валидации OpenVPN
+- Создан OpenVPNProfileValidation.swift с публичным OpenVPNNativeBridge.validateProfile().
+- Добавлены 2 теста резервного режима без ядра.
+- Windows 11 / Swift 6.4.2: swift test — 20/20 успешно.
+- Windows Release: swift build -c release — успешно.
+- Реальная цепочка Swift -> C ABI -> OpenVPN 3 Core ещё не проверена.
+- Apple NetworkExtension и VPN-туннель не реализованы.

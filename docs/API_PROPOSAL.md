@@ -36,3 +36,10 @@ print(OpenVPNNativeBridge.isOpenVPNCoreLinked) // Сейчас false
 - Совместимый переход с устаревшего OpenVPNAdapter после изучения потребительских сценариев.
 
 **Важное ограничение:** будущие имена и сигнатуры не утверждены окончательно. Не разрабатывать потребительское приложение, исходя из существования этих классов до их появления в репозитории.
+
+## Windows Swift API (2026-11-15)
+- OpenVPNNativeBridge.validateProfile(_:) принимает OpenVPNProfile и возвращает OpenVPNProfileValidationResult.
+- Результаты: valid, invalidProfile, invalidArgument, coreUnavailable, nativeError, unexpectedStatus(Int32).
+- По умолчанию SwiftPM не подключает OpenVPN 3 Core, поэтому возвращается coreUnavailable.
+- Проверено: Windows Swift 6.4.2, 20/20 тестов, Debug и Release.
+- Валидация профиля не подтверждает безопасность сервера или установку VPN-соединения.
