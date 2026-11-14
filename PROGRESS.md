@@ -123,3 +123,9 @@
 - Интеграционная сборка находится в tools/windows-swift-core-probe.
 - Обычный SwiftPM пока использует резервный мост без ядра.
 - Реальное VPN-подключение, Apple NetworkExtension и Xcode пока не проверены.
+
+## 2026-11-15 — автоматизация Windows-интеграции
+- Создан scripts/test-windows-swift-core.ps1 с кодировкой UTF-8 BOM для Windows PowerShell 5.1.
+- Автоматизированная сборка mycodex_core.dll и Swift integration probe завершилась успешно.
+- Проверено: SWIFT_CORE_LINKED=1, SWIFT_VALID=1, SWIFT_INVALID_REJECTED=1, SWIFT_TO_OPENVPN3_PASSED.
+- Основная сборка SwiftPM пока использует мост без ядра; VPN-туннель не реализован.
