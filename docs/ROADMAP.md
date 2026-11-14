@@ -1,21 +1,21 @@
 # MYCODEX — delivery roadmap
 
-Every step must have tested evidence before marking COMPLETE. Current statuses: PLANNED except the drafted project docs, which still require GitHub publication.
+Every step must have tested evidence before marking COMPLETE. Current statuses are described per task; the initial documentation is published, but the Swift-only source patch is local pending upload.
 
 ## Phase 0 — bootstrap and investigation
-- [ ] Publish prepared Markdown documentation in `main`, read it back through GitHub, confirm commit SHA.
-- [ ] Audit upstream OpenVPNAdapter API, source layout, integration patterns and license notices; record what is intentionally replaced.
-- [ ] Audit current OpenVPN 3 Core release/branch, license and dependency versions; decide source vs binary packaging.
-- [ ] Verify Apple framework availability, VPN entitlement requirements and distribution rules per platform; set OS/Swift/Xcode baseline.
-- [ ] Write initial public API proposal and migration strategy.
+- [x] Publish prepared Markdown documentation in `main`, read it back through GitHub, confirm commit SHA (`5066088c43326f06d6654c1dc52dd211945bdcb2`).
+- [ ] Complete detailed upstream OpenVPNAdapter API/source/license audit (initial SwiftPM and source layout review recorded in `docs/RESEARCH.md`).
+- [ ] Complete OpenVPN 3 Core audit (current master snapshot and dual-license file identified; dependency inventory and packaging decision pending).
+- [ ] Verify Apple framework/deployment requirements on real Xcode targets (Apple TN3134 review done; final OS/Swift/Xcode baseline still open).
+- [ ] Finalize public tunnel API and migration strategy (initial draft in `docs/API_PROPOSAL.md`).
 
 **Exit criteria:** written decisions with linked evidence and a small build/packaging spike plan.
 
 ## Phase 1 — buildable foundation
-- [ ] Add Swift Package manifest, modules and build scripts.
+- [ ] Publish Swift Package manifest, modules and test script (created and Linux-tested in local patch; GitHub upload pending).
 - [ ] Create/verify the C/C++ bridge and OpenVPN Core linkage on macOS.
 - [ ] Implement typed configuration model and validation with unit tests.
-- [ ] Add CI matrix on supported Apple build targets with version pinning.
+- [ ] Run and pin CI matrix on supported Apple build targets (portable macOS/Linux workflow created in local patch; not executed on GitHub).
 
 **Exit criteria:** reproducible build and passing tests on recorded destinations.
 

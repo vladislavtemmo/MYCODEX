@@ -22,13 +22,13 @@ MYCODEX Public SDK
 
 The Swift package's public library may need separate host-side manager and extension-side runtime products, because a VPN extension owns `NEPacketTunnelProvider` and packet flow. Explicitly design safe communication boundaries and callback ownership.
 
-## Candidate package layout
+## Package foundation and candidate expansion
 
 ```
 Package.swift
 Sources/
   MYCODEX/                # Swift-facing public API (no UI)
-  MYCODEXConfiguration/   # Config parsing / validation
+  MYCODEXConfiguration/   # Limited .ovpn inspection (not full validation)
   MYCODEXAppleTunnel/     # NetworkExtension integration
   COpenVPNBridge/         # C / ObjC++ boundaries where required
 Tests/
@@ -41,7 +41,7 @@ Docs/
   MIGRATION.md
 ```
 
-These paths are proposals, not currently present source code.
+The `Package.swift`, `Sources/MYCODEX`, `Sources/MYCODEXConfiguration` and corresponding `Tests/` are part of the local Swift-only foundation patch (not yet uploaded). AppleTunnel, COpenVPNBridge, examples and an OpenVPN engine remain **proposals only**. See `docs/API_PROPOSAL.md` and `docs/RESEARCH.md`.
 
 ## Proposed public API traits
 - Typed connection configuration and credential references, not raw unvalidated dictionaries.

@@ -3,7 +3,7 @@
 This file is the mandatory entry point for ChatGPT, Codex, and other assistants working in this repository.
 
 ## Session start
-1. Read `memory.md`, `skills.md`, `PROGRESS.md`, `docs/ARCHITECTURE.md`, and `docs/ROADMAP.md` in this order.
+1. Read `memory.md`, `skills.md`, `PROGRESS.md`, `docs/ARCHITECTURE.md`, and `docs/ROADMAP.md` in this order; read `docs/RESEARCH.md` and `docs/API_PROPOSAL.md` when working on implementation.
 2. Inspect the actual repository tree and current branch before making claims about implemented functionality.
 3. Respect confirmed decisions in `memory.md`; treat roadmap entries as proposals, not completed work.
 4. Identify one task and acceptance criteria before editing production code.
