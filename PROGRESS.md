@@ -1,50 +1,62 @@
-# MYCODEX — development progress and handoff log
+# MYCODEX — журнал разработки и передачи задач
 
-## Current status
-**Phase:** 0 research + Phase 1 Swift-only foundation prototype (local patch awaiting GitHub upload).  
-**Runtime engine:** not implemented.  
-**Automated tests:** 8 unit tests passed on Swift 6.2.1 Linux (local patch).  
-**Published SDK:** none.
+## Актуальный статус
 
-## 2026-11-14 — project kickoff
-**Goal:** establish shared memory and working rules for multiple ChatGPT/Codex sessions; define a modern OpenVPN SDK vision.
+- **Фаза:** 1 — переносимая SwiftPM-основа и нативный C ABI.
+- **Опубликовано в GitHub:** первая SwiftPM-основа, коммит `34941e91a94560162ece10479334753e189635b9`.
+- **Подготовлено локально:** C++ ABI и расширенный инспектор `.ovpn`, обновление документации на русском.
+- **Реальный OpenVPN 3 Core:** не подключён.
+- **Реальный Apple VPN-туннель:** не реализован.
+- **Apple/Xcode сборка:** не проводилась.
 
-**Completed in the prepared documentation bundle:**
-- Drafted `README.md` to explain project scope and onboarding.
-- Drafted `AGENTS.md` to make AI agents read and update the shared files.
-- Drafted `memory.md` for permanent decisions and project state.
-- Drafted `skills.md` for technical standards and acceptance criteria.
-- Drafted `docs/ARCHITECTURE.md` and `docs/ROADMAP.md`.
-- Confirmed upstream `ss-abramchuk/OpenVPNAdapter` is archived and its README explicitly notes discontinued support.
+## 2026-11-14 — первичная документация проекта
 
-**Publication update:** User uploaded the initial seven docs; GitHub verified commit `5066088c43326f06d6654c1dc52dd211945bdcb2` in `main`. GitHub connector still rejects direct writes (403), including branch creation. New source patch is local only until uploaded.
+**Цель:** создать общий источник контекста для ChatGPT и Codex.
 
-**Tests:** none — documentation-only work; no native Apple build environment used.
+**Подтверждено в GitHub:** загружены `README.md`, `AGENTS.md`, `memory.md`, `skills.md`, `PROGRESS.md`, `docs/ARCHITECTURE.md`, `docs/ROADMAP.md`, коммит `5066088c43326f06d6654c1dc52dd211945bdcb2`. На первом этапе это была только документация без работающего VPN.
 
-**Next action at that point:** verify documentation; audit upstream and create a minimal Swift package.
+**Блокер:** GitHub-коннектор ChatGPT отклонил запись (403). Загрузка выполнена через GitHub пользователем.
 
-## 2026-11-14 — source foundation and upstream research (local patch)
-**Objective:** begin Swift-only foundation without prematurely vendoring OpenVPN 3 C++.
+## 2026-11-14 — публикация первого Swift Package
 
-- **GitHub verification:** all original seven docs found in `main`, commit `5066088c43326f06d6654c1dc52dd211945bdcb2`.
-- **Upstream audit:** original adapter SwiftPM tools version 5.1, vendored ASIO/LZ4/mbedTLS; current upstream OpenVPN 3 C++ client, dual AGPLv3/MPL 2.0, research snapshot `0c1ce172fe918b05463d71e682a0c2f2d8fe7899`; see `docs/RESEARCH.md`.
-- **Apple review:** official NetworkExtension packet tunnel and TN3134 documentation reviewed; Apple builds, entitlements and devices have not been tested.
-- **Local files added:** `Package.swift`, `.gitignore`, `scripts/test.sh`, `.github/workflows/swift-package.yml` (CI declaration only, not executed), 4 Swift source files (types and redacted profile), `OpenVPNProfileInspector.swift`, 2 XCTest files, `docs/RESEARCH.md`, `docs/API_PROPOSAL.md`.
-- **Local files updated:** `README.md`, `AGENTS.md`, `memory.md`, `docs/ARCHITECTURE.md`, `docs/ROADMAP.md`, this file.
-- **Tests:** `swift test` on Swift 6.2.1 / x86_64 Linux: **8 passed, 0 failures**. No Xcode or Apple-platform build. No OpenVPN 3 engine integration and no real VPN traffic.
-- **Known limitations:** inspector extracts only top-level `remote`/`proto`; no full `.ovpn` parser; `OpenVPNProfile` checks bounded text only. No credential management, session runtime, networking or NetworkExtension package yet.
-- **Blocker:** GitHub connector read works, create branch/file returns 403 `Resource not accessible by integration` even though account can upload in GitHub website. New patch has **not** been committed by assistant; GitHub CI workflow still awaits first run.
-- **Next:** user uploads source patch to `main`, verify file tree, run `swift test` on macOS/Xcode, then audit/pin OpenVPN 3 engine, decide licenses/build path, start C++ bridge proof of concept.
+**Цель:** перейти от документации к исходному коду и переносимым тестам.
 
-## Template for future entries
-### YYYY-MM-DD — task title
-- Objective / issue:
-- Branch / commit / PR:
-- Files changed:
-- Implementation:
-- Tests executed and actual results:
-- Unverified areas:
-- Decisions / risks:
-- Next task:
+**Подтверждено в GitHub:** пользователь загрузил `Package.swift`, `Sources/MYCODEX`, `Sources/MYCODEXConfiguration`, тесты и документы в ветку `main`, коммит `34941e91a94560162ece10479334753e189635b9`.
 
-Do not erase older log entries; append new dated entries. Keep the summary at the top current.
+**Содержимое:** модели адресов/транспорта/состояний, безопасный контейнер `.ovpn`, ограниченный инспектор профиля. Предыдущий локальный тест Swift 6.2.1 Linux: 8 тестов прошли; Apple-тестов нет.
+
+## 2026-11-14 — нативный мост и русская документация
+
+**Цель:** подготовить интерфейс для будущего OpenVPN 3 Core и улучшить извлечение серверов из `.ovpn` без ложных обещаний о рабочем туннеле.
+
+**Локальные изменения:**
+
+- `Package.swift`: C++20 target `COpenVPNBridge`, зависимость из `MYCODEX`.
+- `Sources/COpenVPNBridge/include/MYCODEXBridge.h` и `MYCODEXBridge.cpp`: компилируемый C ABI с версией и честным признаком отсутствия OpenVPN 3 Core.
+- `Sources/MYCODEX/OpenVPNNativeBridge.swift`: Swift-доступ к ABI и диагностике ядра.
+- `Sources/MYCODEXConfiguration/OpenVPNProfileInspector.swift`: `<connection>`, директивы `proto`, `remote host tcp-client`, исключение inline-содержимого и ошибки незакрытых блоков.
+- `Tests/...`: проверки C ABI, удалённых адресов и ошибок профиля.
+- Все README/инструкции/исследование/архитектура/API/дорожная карта переведены на русский и актуализированы.
+- `docs/CORE_INTEGRATION.md`: конкретная последовательность подключения OpenVPN 3 Core.
+
+**Проверки:** Linux x86_64, Swift 6.2.1: `swift test --parallel` — 13 тестов без ошибок; `swift test` — 13 тестов, 0 ошибок (вывод XCTest); `swift build -c release` — успешно; `swift package describe` — успешно. C++20 target действительно компилируется. Xcode/Apple не проверялись.
+
+**Не сделано:** интеграция настоящего OpenVPN 3 Core, сетевой стек и Packet Tunnel Provider, системные подписанные расширения, Apple device-сборка.
+
+**Публикация:** на момент подготовки этого документа новые локальные изменения **не подтверждены в GitHub**. Предыдущие попытки записи через коннектор вернули 403. Если запись снова закрыта, приложить архив/патч, но не помечать коммит выполненным.
+
+**Следующий шаг:** выбрать и зафиксировать upstream OpenVPN 3 Core SHA после проверки C++20 build+license/dependency inventory; реализовать настоящую связку OpenVPNClient и TunBuilderBase, проверить на macOS через Xcode.
+
+## Шаблон следующей записи
+
+### ГГГГ-ММ-ДД — название задачи
+- Цель:
+- Ветка, коммит/PR:
+- Файлы:
+- Изменения:
+- Запущенные тесты и фактические результаты:
+- Непроверенные области:
+- Технические решения/риски:
+- Следующий шаг:
+
+Старые записи не удалять — дописывать новые и актуализировать только статус наверху.

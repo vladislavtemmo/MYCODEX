@@ -1,6 +1,15 @@
-# Public API proposal — not a finished implementation
+# MYCODEX — публичный API и направление развития
 
-## Swift-only foundation (implemented in local patch)
+## Уже реализовано и проверено в переносимой сборке
+
+- `OpenVPNTransport`: `udp`, `tcp`.
+- `OpenVPNEndpoint`: структурно проверяемый hostname и ненулевой порт.
+- `OpenVPNConnectionState`: набор будущих состояний.
+- `OpenVPNProfile`: хранение текста `.ovpn` с редакцией при `description`/`debugDescription` и ограничением размера.
+- `OpenVPNProfileInspector.remoteEndpoints(in:)`: ограниченное извлечение `remote`, `proto` и `<connection>`; не полноценный parser и не проверка безопасности.
+- `OpenVPNNativeBridge`: версия ABI, имя нативного backend и `isOpenVPNCoreLinked == false` до интеграции ядра.
+
+### Пример работы только с профилем
 
 ```swift
 import MYCODEX
@@ -11,36 +20,19 @@ client
 proto udp
 remote vpn.example.org 1194
 """)
-
 let endpoints = try OpenVPNProfileInspector.remoteEndpoints(in: profile)
-// [OpenVPNEndpoint(hostname: "vpn.example.org", port: 1194, transport: .udp)]
+print(endpoints.map(\.hostname))
+print(OpenVPNNativeBridge.isOpenVPNCoreLinked) // Сейчас false
 ```
 
-`OpenVPNProfile` performs *only* bounded-text checks (nonblank, <= 1 MiB, no NUL). `OpenVPNProfileInspector` finds top-level `remote` and `proto` directives only, ignores inline certificate/key blocks, and does not verify DNS, cipher compatibility, server identity or the full OpenVPN grammar. There is no VPN connection capability in these two libraries yet.
+## Проектируется, но не реализовано
 
-## Proposed client-facing API (NOT IMPLEMENTED)
+- `OpenVPNClient` с `async/await`-операциями `start`, `stop`, `cancel`.
+- Поток событий соединения `AsyncSequence`.
+- `OpenVPNConnectionOptions`, ограничения таймаута и политики reconnect.
+- Ошибки с явными причинами (`invalidProfile`, `authenticationFailed`, `transportError`, `permissionDenied`, `cancelled`).
+- Секреты через Keychain references и отдельный безопасный слой.
+- Отдельные API хост-приложения и `NEPacketTunnelProvider` без смешивания ответственностей.
+- Совместимый переход с устаревшего OpenVPNAdapter после изучения потребительских сценариев.
 
-```swift
-// Illustrative API direction only. Names and signatures are not final.
-public protocol MYCODEXTunnelSession: Sendable {
-    var events: AsyncStream<OpenVPNConnectionEvent> { get }
-    func start(using profile: OpenVPNProfile, credentialReference: Data?) async throws
-    func stop() async
-}
-```
-
-Design boundaries to resolve before implementation:
-
-1. Host application: `NETunnelProviderManager` configuration, user consent and start/stop commands.
-2. Provider extension: `NEPacketTunnelProvider`, `NEPacketTunnelFlow`, network settings, callbacks, lifecycle, tunnel memory/CPU budget.
-3. Engine: audit-pinned OpenVPN 3 Core C++ with narrow C ABI/Obj-C++ bridge, explicit packet ownership, cancellation, no C++ exception across C.
-4. Credentials: Keychain persistent references and least privilege; no plaintext password in `UserDefaults`, logs, or `providerConfiguration`.
-5. Events and state: no duplicate start/stop completions; reconnect/error classification; callback-to-async handoff without blocking packet threads.
-6. Integration tests: a real signed extension and a real OpenVPN server; SoftEther interoperability separately verified.
-
-## Acceptance gates for implementation
-
-- Document each public API's ownership, thread isolation, cancellation and errors.
-- Provide legitimate signed NetworkExtension examples (no entitlement bypass).
-- Confirm builds for each marketed Apple platform with pinned dependencies.
-- Do not describe an unbuilt provider or engine as supported.
+**Важное ограничение:** будущие имена и сигнатуры не утверждены окончательно. Не разрабатывать потребительское приложение, исходя из существования этих классов до их появления в репозитории.

@@ -1,10 +1,10 @@
 import Foundation
 
-/// An opaque validated container for .ovpn UTF-8 text.
+/// Непрозрачный контейнер UTF-8 текста `.ovpn`.
 ///
-/// IMPORTANT: This type does NOT validate OpenVPN directives or authenticate
-/// certificates. A profile may contain embedded private keys or credentials:
-/// never print its raw contents or persist them in plaintext.
+/// ВАЖНО: тип не проверяет директивы OpenVPN и не подтверждает
+/// подлинность сертификатов. В профиле могут быть закрытые ключи:
+/// нельзя выводить исходное содержимое или хранить его открытым текстом.
 public struct OpenVPNProfile: Sendable, CustomStringConvertible, CustomDebugStringConvertible {
     public static let maximumByteCount = 1_048_576
 
@@ -23,7 +23,7 @@ public struct OpenVPNProfile: Sendable, CustomStringConvertible, CustomDebugStri
         self.rawContent = ovpnText
     }
 
-    /// Use only for forwarding configuration to a trusted parser/engine; do not log.
+    /// Передавать только проверенному парсеру/движку. Не логировать.
     public func withRawConfiguration<T>(_ body: (String) throws -> T) rethrows -> T {
         try body(rawContent)
     }

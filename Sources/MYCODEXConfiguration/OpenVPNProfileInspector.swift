@@ -1,82 +1,134 @@
 import Foundation
 import MYCODEX
 
-/// Extracts *top-level remote endpoints only* from common .ovpn text.
+/// Извлекает адреса серверов из распространённых форм `.ovpn`.
 ///
-/// This is deliberately NOT a complete OpenVPN configuration parser. It does
-/// not process includes, nested <connection> blocks, inline key material or
-/// the full OpenVPN directive grammar. Never use it as a security validator.
+/// Поддерживаются верхнеуровневые `remote` и блоки `<connection>`, а также
+/// объявления `proto` и индивидуальные переопределения транспорта.
+/// Это НЕ полный парсер OpenVPN, НЕ проверка безопасности профиля и НЕ замена
+/// функции `eval_config` настоящего OpenVPN 3 Core.
 public enum OpenVPNProfileInspector {
     public static func remoteEndpoints(in profile: OpenVPNProfile) throws -> [OpenVPNEndpoint] {
         try profile.withRawConfiguration { text in
-            var proto: OpenVPNTransport = .udp
-            var remotes: [(hostname: String, port: UInt16, override: OpenVPNTransport?, line: Int)] = []
+            struct PendingRemote {
+                let hostname: String
+                let port: UInt16
+                let transport: OpenVPNTransport?
+                let connectionID: Int?
+                let line: Int
+            }
+
+            var defaultTransport: OpenVPNTransport = .udp
+            var connectionTransports: [Int: OpenVPNTransport] = [:]
+            var remotes: [PendingRemote] = []
+            var connectionID: Int?
+            var nextConnectionID = 0
             var embeddedBlock: String?
 
             for (index, rawLine) in text.components(separatedBy: .newlines).enumerated() {
                 let lineNumber = index + 1
                 let line = rawLine.trimmingCharacters(in: .whitespacesAndNewlines)
                 if line.isEmpty || line.hasPrefix("#") || line.hasPrefix(";") { continue }
+                let lowercased = line.lowercased()
 
-                // Skip inline content (certificates and key blocks). Connection
-                // blocks are also skipped rather than partially interpreted.
+                // Не читаем сертификаты, закрытые ключи и другие inline-блоки.
                 if let block = embeddedBlock {
-                    if line.lowercased() == "</\(block)>" { embeddedBlock = nil }
+                    if lowercased == "</\(block)>" { embeddedBlock = nil }
                     continue
                 }
-                if line.hasPrefix("<"), line.hasSuffix(">"), !line.hasPrefix("</") {
-                    let name = String(line.dropFirst().dropLast()).lowercased()
-                    if !name.isEmpty { embeddedBlock = name; continue }
+
+                if lowercased == "<connection>" {
+                    guard connectionID == nil else {
+                        throw OpenVPNInspectionError.invalidBlock(line: lineNumber)
+                    }
+                    nextConnectionID += 1
+                    connectionID = nextConnectionID
+                    continue
+                }
+                if lowercased == "</connection>" {
+                    guard connectionID != nil else {
+                        throw OpenVPNInspectionError.invalidBlock(line: lineNumber)
+                    }
+                    connectionID = nil
+                    continue
                 }
 
-                let tokens = line.split(whereSeparator: { $0.isWhitespace }).map(String.init)
-                let clean = Array(tokens.prefix(while: { !$0.hasPrefix("#") && !$0.hasPrefix(";") }))
-                guard let directive = clean.first?.lowercased() else { continue }
+                if lowercased.hasPrefix("<"), lowercased.hasSuffix(">"),
+                   !lowercased.hasPrefix("</") {
+                    let name = String(lowercased.dropFirst().dropLast())
+                    guard !name.isEmpty else {
+                        throw OpenVPNInspectionError.invalidBlock(line: lineNumber)
+                    }
+                    embeddedBlock = name
+                    continue
+                }
 
-                switch directive {
+                let fields = line.split(whereSeparator: { $0.isWhitespace }).map(String.init)
+                let tokens = Array(fields.prefix {
+                    !$0.hasPrefix("#") && !$0.hasPrefix(";")
+                })
+                guard let command = tokens.first?.lowercased() else { continue }
+
+                switch command {
                 case "proto":
-                    guard clean.count == 2, let parsed = parseTransport(clean[1]) else {
+                    guard tokens.count == 2,
+                          let transport = parseTransport(tokens[1]) else {
                         throw OpenVPNInspectionError.invalidTransport(line: lineNumber)
                     }
-                    proto = parsed
+                    if let connectionID {
+                        connectionTransports[connectionID] = transport
+                    } else {
+                        defaultTransport = transport
+                    }
+
                 case "remote":
-                    guard (2...4).contains(clean.count) else {
+                    guard (2...4).contains(tokens.count) else {
                         throw OpenVPNInspectionError.invalidRemote(line: lineNumber)
                     }
-                    let hostname = clean[1]
-                    let port: UInt16
-                    if clean.count >= 3 {
-                        guard let parsed = UInt16(clean[2]), parsed != 0 else {
+
+                    let hostname = tokens[1]
+                    var port: UInt16 = 1194
+                    var transport: OpenVPNTransport?
+                    if tokens.count >= 3 {
+                        if let specifiedPort = UInt16(tokens[2]), specifiedPort != 0 {
+                            port = specifiedPort
+                        } else if tokens.count == 3,
+                                  let parsed = parseTransport(tokens[2]) {
+                            transport = parsed
+                        } else {
                             throw OpenVPNInspectionError.invalidRemote(line: lineNumber)
                         }
-                        port = parsed
-                    } else {
-                        port = 1194
                     }
-                    let override: OpenVPNTransport?
-                    if clean.count == 4 {
-                        guard let parsed = parseTransport(clean[3]) else {
+                    if tokens.count == 4 {
+                        guard let parsed = parseTransport(tokens[3]) else {
                             throw OpenVPNInspectionError.invalidTransport(line: lineNumber)
                         }
-                        override = parsed
-                    } else {
-                        override = nil
+                        transport = parsed
                     }
-                    remotes.append((hostname, port, override, lineNumber))
+                    remotes.append(PendingRemote(
+                        hostname: hostname, port: port, transport: transport,
+                        connectionID: connectionID, line: lineNumber
+                    ))
+
                 default:
-                    // Preserve unknown directives for the full engine; do not
-                    // claim they are valid or supported.
+                    // Неизвестные директивы анализирует только реальный движок.
                     break
                 }
             }
 
-            guard !remotes.isEmpty else { throw OpenVPNInspectionError.noTopLevelRemote }
+            if embeddedBlock != nil || connectionID != nil {
+                throw OpenVPNInspectionError.unclosedBlock
+            }
+            guard !remotes.isEmpty else { throw OpenVPNInspectionError.noRemote }
+
             return try remotes.map { remote in
                 do {
                     return try OpenVPNEndpoint(
                         hostname: remote.hostname,
                         port: remote.port,
-                        transport: remote.override ?? proto
+                        transport: remote.transport
+                            ?? remote.connectionID.flatMap { connectionTransports[$0] }
+                            ?? defaultTransport
                     )
                 } catch {
                     throw OpenVPNInspectionError.invalidRemote(line: remote.line)
@@ -94,9 +146,11 @@ public enum OpenVPNProfileInspector {
     }
 }
 
-/// Line numbers are 1-based in the original profile.
+/// Номера строк начинаются с 1 в оригинальном `.ovpn`-профиле.
 public enum OpenVPNInspectionError: Error, Equatable, Sendable {
-    case noTopLevelRemote
+    case noRemote
     case invalidRemote(line: Int)
     case invalidTransport(line: Int)
+    case invalidBlock(line: Int)
+    case unclosedBlock
 }

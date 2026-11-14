@@ -1,59 +1,63 @@
-# MYCODEX — architecture proposal (not implemented)
+# MYCODEX — архитектура
 
-## Goals
-A reusable Swift-facing OpenVPN SDK with a stable API and a clear separation from Apple-specific VPN extension plumbing. No private framework APIs.
+**Статус:** есть переносимое Swift-ядро и C++-точка ABI; интеграция OpenVPN 3 Core и Apple NetworkExtension только проектируется.
 
-## Layers
+## Целевые слои
 
+```text
+Приложение (SwiftUI / UIKit / AppKit)
+  |
+  +-- Хост-менеджер NETunnelProviderManager [НЕ РЕАЛИЗОВАН]
+  |      \-- Сохранённая VPN-конфигурация / запуск расширения
+  |
+  +-- MYCODEX — типобезопасные модели, состояния, публичный Swift API
+  |      \-- OpenVPNNativeBridge (сборка C++ ABI работает)
+  |             \-- COpenVPNBridge (OpenVPN 3 Core пока НЕ подключён)
+  |                    \-- openvpn::ClientAPI::OpenVPNClient [НЕ РЕАЛИЗОВАН]
+  |
+  +-- MYCODEXConfiguration — ограниченный анализ .ovpn
+
+NEPacketTunnelProvider (отдельное расширение, НЕ РЕАЛИЗОВАНО)
+  +-- setTunnelNetworkSettings + NEPacketTunnelFlow
+  +-- Адаптер TunBuilderBase <-> NEPacketTunnelFlow [НЕ РЕАЛИЗОВАН]
+  \-- Поток событий и диагностика
 ```
-Consumer app (SwiftUI / UIKit / AppKit)
-    |  public async Swift API and events
-MYCODEX Public SDK
-    |-- Configuration parser / validation (.ovpn)
-    |-- Credentials and identity references (Keychain integration)
-    |-- Connection state, errors, metrics and diagnostics
-    |-- Tunnel lifecycle coordinator
-    |        |-- NetworkExtension integration (app / provider extension)
-    |        |-- Platform-specific network settings, DNS, routes and MTU
-    |-- Internal C/C++ bridge (memory and concurrency boundary)
-    |        `-- Audited OpenVPN 3 Core version + vetted dependencies
-    `-- Tests, examples and integration fixtures
-```
 
-The Swift package's public library may need separate host-side manager and extension-side runtime products, because a VPN extension owns `NEPacketTunnelProvider` and packet flow. Explicitly design safe communication boundaries and callback ownership.
+Нативный OpenVPN 3 Core подключается только после проверки лицензирования, выбранного SHA и воспроизводимой Apple-сборки. Swift Package не должен получать прямую зависимость на UIKit/SwiftUI.
 
-## Package foundation and candidate expansion
+## Реальная структура пакета
 
-```
+```text
 Package.swift
 Sources/
-  MYCODEX/                # Swift-facing public API (no UI)
-  MYCODEXConfiguration/   # Limited .ovpn inspection (not full validation)
-  MYCODEXAppleTunnel/     # NetworkExtension integration
-  COpenVPNBridge/         # C / ObjC++ boundaries where required
+  MYCODEX/                    # Публичные Swift-модели и диагностика моста
+  MYCODEXConfiguration/       # Инспектор .ovpn (не полный парсер)
+  COpenVPNBridge/             # C++20 и публичный C ABI — скелет
+    include/MYCODEXBridge.h
 Tests/
   MYCODEXTests/
-  ConfigurationTests/
-Examples/
-  AppleVPNExample/        # Future host app + tunnel extension
-Docs/
-  API.md
-  MIGRATION.md
+  MYCODEXConfigurationTests/
+.github/workflows/            # Предложение CI, требует запуска на GitHub
+scripts/test.sh
 ```
 
-The `Package.swift`, `Sources/MYCODEX`, `Sources/MYCODEXConfiguration` and corresponding `Tests/` are part of the local Swift-only foundation patch (not yet uploaded). AppleTunnel, COpenVPNBridge, examples and an OpenVPN engine remain **proposals only**. See `docs/API_PROPOSAL.md` and `docs/RESEARCH.md`.
+## Инварианты интерфейса C/C++
 
-## Proposed public API traits
-- Typed connection configuration and credential references, not raw unvalidated dictionaries.
-- Explicit connection states and observable event stream (e.g. AsyncSequence).
-- Explicit start/stop/cancel semantics, idempotent cleanup, reconnect policy and timeouts.
-- Separate network extension configuration from protocol engine controls.
-- Error types with actionable causes, without leaking credentials or raw secrets.
-- Logging/metrics hooks with opt-in safe redaction and predictable resource limits.
+- Открытый C ABI содержит функции `mycodex_bridge_abi_version`, `mycodex_bridge_core_linked`, `mycodex_bridge_backend_name`.
+- При отсутствии движка `mycodex_bridge_core_linked() == 0`. Никакие функции не утверждают, что происходит VPN-подключение.
+- C++-объекты не пересекают ABI как Swift-объекты; будущие opaque handles имеют явные функции create/destroy.
+- Буферы, передаваемые между Swift, OpenVPN и packet flow, должны иметь документированное владение и жизненный цикл.
+- Все события и результаты операций должны проходить явные состояния, ошибки и отмену.
 
-## Critical constraints
-- `NETunnelProviderManager` works with system-managed VPN configuration; provisioning, entitlements and user consent cannot be circumvented.
-- Apple platform compatibility must be proven individually; do not assume watchOS or all visionOS/tvOS variants support packet tunnels.
-- OpenVPN 3 Core and original OpenVPNAdapter have license obligations; legal compliance and dependency inventory precede vendoring/reuse.
-- Do not claim system-wide routing/DoH/split tunneling unless the platform's NetworkExtension APIs and integration tests substantiate it.
-- Measure extension memory, CPU and battery impact on hardware; no untested performance claims.
+## Отличие `.ovpn`-инспектора от OpenVPN-парсера
+
+`OpenVPNProfileInspector` извлекает только адреса и транспорт, поддерживая директивы `remote`, `proto` и блоки `<connection>`. Он не реализует всю грамматику OpenVPN, не проверяет криптографию, сертификаты, `pull-filter`, `route`, директивы внешних файлов и фактическую поддержку профиля в core. В будущем валидность определяет реальный OpenVPN 3 Core.
+
+## Требования Apple
+
+- Хост-приложение управляет системным VPN-профилем и пользовательским разрешением через `NETunnelProviderManager`.
+- Подписанное расширение `NEPacketTunnelProvider` отвечает за пакеты, сетевые параметры, MTU, DNS и маршруты в рамках возможностей API.
+- Проверка entitlement, App Group/Keychain Access Group и расширения должна проходить отдельно для каждой платформы.
+- Результаты Linux SwiftPM-тестов не подтверждают совместимость с Apple.
+
+Подробности следующего шага: [CORE_INTEGRATION.md](CORE_INTEGRATION.md).

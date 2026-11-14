@@ -1,13 +1,13 @@
 import Foundation
 
-/// A remote OpenVPN server endpoint extracted from a profile or supplied by a host app.
+/// Адрес удалённого VPN-сервера из профиля или настроек приложения.
 public struct OpenVPNEndpoint: Hashable, Sendable {
     public let hostname: String
     public let port: UInt16
     public let transport: OpenVPNTransport
 
-    /// Rejects empty hostnames, whitespace/control characters, and port zero.
-    /// This is minimal structural validation, not DNS resolution or TLS validation.
+    /// Запрещает пустой hostname, пробелы/управляющие символы и нулевой порт.
+    /// Это только структурная проверка, без DNS и TLS.
     public init(hostname: String, port: UInt16 = 1194, transport: OpenVPNTransport = .udp) throws {
         guard !hostname.isEmpty,
               !hostname.unicodeScalars.contains(where: { CharacterSet.whitespacesAndNewlines.union(.controlCharacters).contains($0) }),

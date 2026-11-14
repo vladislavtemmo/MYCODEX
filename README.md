@@ -1,38 +1,58 @@
-# MYCODEX
+# MYCODEX — современная OpenVPN-библиотека для Apple
 
-**Modern OpenVPN SDK for the Apple ecosystem — Swift-only foundation stage.**
+**Статус: этап 1 — Swift Package и проверяемый C++-мост. VPN-движок ещё не подключён.**
 
-MYCODEX aims to provide a maintained Swift-first OpenVPN library, integrated with Apple's NetworkExtension and packaged using Swift Package Manager, as a successor in purpose (not yet in implementation) to the archived [OpenVPNAdapter](https://github.com/ss-abramchuk/OpenVPNAdapter).
+MYCODEX — проект поддерживаемого SDK с публичным Swift API и интеграцией OpenVPN 3 Core в приложения Apple через `NetworkExtension`. Это функциональная замена по назначению, а не копия прекратившего развитие [OpenVPNAdapter](https://github.com/ss-abramchuk/OpenVPNAdapter).
 
-**Priority platforms:** iOS, iPadOS, macOS. **Research targets:** tvOS, visionOS; watchOS is subject to platform restrictions and is *not* promised to run a local OpenVPN tunnel.
+## Целевые платформы
 
-The first phase adds a **Swift-only package** containing typed models, redacted profile containers and limited `.ovpn` endpoint inspection. This does **not** include a functional VPN engine, NetworkExtension provider, VPN authentication or live packet transport.
+- **Основные:** iOS, iPadOS, macOS.
+- **Отдельная проверка:** tvOS, visionOS — в зависимости от SDK, VPN entitlement и результатов сборки на устройствах.
+- **watchOS:** локальное VPN-туннелирование не заявляется до подтверждения соответствующего системного API.
 
-## Start here
+В `Package.swift` пока стоят **предварительные**, а не окончательные минимальные версии: iOS 16 и macOS 13.
 
-- [AGENTS.md](AGENTS.md) — mandatory instructions for agents and cross-chat handoffs
-- [memory.md](memory.md) — durable decisions and scope
-- [skills.md](skills.md) — engineering rules, reviews and testing
-- [PROGRESS.md](PROGRESS.md) — dated work log and next action
-- [Architecture](docs/ARCHITECTURE.md) — proposed modules and boundaries
-- [Roadmap](docs/ROADMAP.md) — implementation phases and acceptance criteria
-- [Research](docs/RESEARCH.md) — verified upstream, licensing and Apple API findings
-- [API proposal](docs/API_PROPOSAL.md) — current foundation and proposed future tunnel API
+## Что уже реализовано
 
-## Continue in another chat
+- Пакет SwiftPM с двумя библиотеками `MYCODEX` и `MYCODEXConfiguration`.
+- Модели адресов, транспорта и состояний VPN-соединения.
+- Контейнер `.ovpn`, скрывающий содержимое при обычном выводе/отладке.
+- Ограниченный инспектор `.ovpn`: директивы `remote`, `proto`, блоки `<connection>`, пропуск встроенных сертификатов/ключей.
+- Отдельный компилируемый C++ target `COpenVPNBridge` с проверяемым C ABI (`OpenVPNNativeBridge`).
+- Автоматизированные тесты переносимой части SDK.
 
-Connect the same GitHub account and ask: "Read `vladislavtemmo/MYCODEX` files `AGENTS.md`, `memory.md`, `skills.md`, `PROGRESS.md`, and `docs/ROADMAP.md` and continue the first open task. Update the log after verified work."
+**Чего пока нет:** линковки OpenVPN 3 Core, полноценной проверки профилей движком, создания `NEPacketTunnelProvider`, подключения к VPN, шифрованного туннеля и тестов на реальных устройствах Apple. Нативный мост честно возвращает `isOpenVPNCoreLinked == false`.
 
-Files are a shared, versioned knowledge base — **not** automatic cross-chat memory. Every assistant must read and commit them explicitly.
+## Сборка и тесты
 
-## Legal and platform constraints
+На компьютере с Swift 6 и C++20-компилятором:
 
-Original OpenVPNAdapter is AGPLv3-licensed and discontinued by its author; OpenVPN 3 Core/dependency licensing and Apple's VPN entitlement restrictions must be verified before distributing any implementation. No upstream source code is included in this bootstrap.
+```bash
+swift build
+swift test
+swift build -c release
+```
 
-## Swift package (first local development increment)
+Успешный Linux-прогон подтверждает только переносимый Swift/C++ код, **не** работоспособность Apple VPN. Для iOS/macOS далее нужны Xcode, подписи и entitlement.
 
-The Swift-only foundation contains `MYCODEX` and `MYCODEXConfiguration`. With Swift 6 installed, run `swift test` on an available development host. The package currently uses provisional floors iOS 16/macOS 13; **Apple target builds and VPN functionality have not been validated**.
+## Документы для разработчиков и AI-агентов
 
-Do not mistake `OpenVPNProfileInspector` for a full `.ovpn` parser or a credential/security validator.
+- [AGENTS.md](AGENTS.md) — инструкция на начало и конец каждого сеанса.
+- [memory.md](memory.md) — подтверждённые решения и долговременная память проекта.
+- [skills.md](skills.md) — инженерные стандарты и определение готовности.
+- [PROGRESS.md](PROGRESS.md) — хронологический журнал задач, проверок, проблем.
+- [Архитектура](docs/ARCHITECTURE.md) — разделение Swift, C++ и Apple NetworkExtension.
+- [Дорожная карта](docs/ROADMAP.md) — планы с критериями готовности.
+- [Исследование](docs/RESEARCH.md) — первоисточники и ограничения.
+- [Предложение API](docs/API_PROPOSAL.md) — реализованные и проектируемые интерфейсы.
+- [Интеграция ядра](docs/CORE_INTEGRATION.md) — следующий этап подключения OpenVPN 3 Core.
 
-The `swift-package.yml` workflow is a **proposal committed with this patch**, not proof of a green GitHub Actions run.
+## Передача контекста в другой чат
+
+> Открой GitHub-репозиторий `vladislavtemmo/MYCODEX`, прочитай `AGENTS.md`, `memory.md`, `skills.md`, `PROGRESS.md` и документы в `docs/`. Проверь реальные файлы и продолжи первый незавершённый пункт. После работы обнови журнал на русском.
+
+Файлы GitHub — **общий контекст**, но не «автоматическая память»: каждый агент должен перечитывать их. Если интеграции GitHub запрещена запись, подготовить патч/архив, но не утверждать, что изменения опубликованы.
+
+## Лицензии
+
+Оригинальный OpenVPNAdapter имеет лицензию AGPLv3, а OpenVPN 3 Core доступен по AGPLv3 или MPL 2.0. Перед включением исходников ядра, OpenSSL и других зависимостей требуется полная проверка совместимости лицензий и требований распространения. В этом репозитории пока **нет исходников OpenVPN 3 Core**.

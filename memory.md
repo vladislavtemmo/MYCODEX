@@ -1,48 +1,59 @@
-# MYCODEX — persistent project memory
+# MYCODEX — долговременная память проекта
 
-**Last updated:** 2026-11-14  
-**Status:** documentation published; Swift-only foundation created in local patch, pending GitHub publication; no VPN engine yet.
+**Обновлено:** 2026-11-14  
+**Состояние:** пакет SwiftPM есть в GitHub; локально подготовлен следующий инкремент (C++ ABI + улучшенный инспектор), но он ещё не опубликован и не содержит настоящего VPN-движка.
 
-## Mission
-Build a contemporary, maintainable OpenVPN SDK for Apple's ecosystem to replace reliance on the unmaintained `ss-abramchuk/OpenVPNAdapter`. This is an SDK/framework, not primarily a VPN client UI.
+## Миссия
 
-## Repository and reference
-- Primary repository: `vladislavtemmo/MYCODEX` (GitHub, default branch `main`).
-- Reference: https://github.com/ss-abramchuk/OpenVPNAdapter (archived; author explicitly discontinued support).
-- Original adapter wraps OpenVPN 3 Core, uses Objective-C and NetworkExtension, and is AGPLv3-licensed. Historic behavior is useful to study but must not be copied blindly.
-- Candidate protocol engine: actively maintained OpenVPN 3 Core, subject to version, build, export/compliance, dependency and licensing assessment.
+Создать современную, сопровождаемую OpenVPN-библиотеку для экосистемы Apple, чтобы не зависеть от заброшенного `ss-abramchuk/OpenVPNAdapter`. Это **SDK**, а не в первую очередь интерфейс VPN-клиента.
 
-## Product scope (target, NOT confirmed support)
-- Tier 1: iOS, iPadOS, macOS.
-- Research and validate separately: tvOS and visionOS, subject to Apple framework availability, entitlements and distribution rules.
-- watchOS: investigate; do not promise a locally running packet-tunnel OpenVPN engine unless supported and verified.
-- Minimum OS, Xcode/Swift versions and final licensing model are **not yet selected**.
+## Репозиторий и общий контекст
 
-## Design decisions agreed at project outset
-1. Use Swift Package Manager as the preferred distribution mechanism.
-2. Swift-first and async/await-facing public API where feasible; any lower-level bridge is internal.
-3. Use Apple's NetworkExtension and authorized VPN entitlements, without private API.
-4. Separate protocol engine, configuration/parser, tunnel orchestration, and public API.
-5. Include tests, CI, diagnostics, structured error handling, and reproducible dependency versions.
-6. Maintain a cross-chat handoff through versioned Markdown files, not ChatGPT's implicit memory.
+- Основной GitHub: https://github.com/vladislavtemmo/MYCODEX, ветка `main`.
+- Вся документация и коммуникация — **на русском**; названия публичных Swift-типов, файлов и API сохранять на английском.
+- Для передачи памяти между чатами читать `AGENTS.md`, `memory.md`, `skills.md`, `PROGRESS.md` и документы папки `docs`.
+- После работы агент обновляет соответствующие документы и пытается самостоятельно отправить изменения через разрешённый GitHub доступ. Никаких утверждений об опубликованном коммите без подтверждения GitHub.
 
-## Capabilities to design and verify
-.ovpn parsing and import, username/password and certificates, Keychain storage, UDP/TCP, DNS/routing/MTU/IPv4/IPv6, reachability/reconnect, cancellation, logs and traffic/session statistics. Include compatibility testing against OpenVPN and compatible SoftEther configurations. These are **targets**, not implemented features.
+## Проверенные факты
 
-## Unresolved engineering questions
-- Choose engine distribution and license compliance strategy (OpenVPN 3 Core and transitive dependencies).
-- Determine minimum supported Apple OS / Swift / Xcode matrix after inspecting API/toolchain support.
-- Validate tvOS/visionOS feasibility and watchOS boundaries with official APIs and device tests.
-- Decide binary vs source package distribution and XCFramework build pipeline.
-- Define any compatibility façade for migrating existing OpenVPNAdapter clients.
+- Архивный OpenVPNAdapter: https://github.com/ss-abramchuk/OpenVPNAdapter; поддержка остановлена, исходники лицензированы по AGPLv3, SwiftPM ранее использовал инструменты Swift 5.1 и C++14.
+- Активный OpenVPN 3 Core: https://github.com/OpenVPN/openvpn3; исходный интерфейс `client/ovpncli.hpp`, класс `openvpn::ClientAPI::OpenVPNClient`, TUN-абстракция `TunBuilderBase`.
+- OpenVPN 3 Core — клиентская библиотека на современном C++20. Лицензирование AGPLv3 / MPL 2.0; полный состав зависимостей и compliance перед использованием ещё не утверждены.
+- Исследовательский коммит `0c1ce172fe918b05463d71e682a0c2f2d8fe7899` за 2026-11-04 проверен, **не выбран как production pin**.
+- GitHub-публикация базовой документации подтверждена коммитом `5066088c43326f06d6654c1dc52dd211945bdcb2`.
+- Вторая загрузка SwiftPM-основы подтверждена коммитом `34941e91a94560162ece10479334753e189635b9` от 2026-11-14.
+- Подключение ChatGPT к GitHub имеет чтение, но попытка создавать файлы/ветки ранее возвращала HTTP 403 `Resource not accessible by integration`.
 
-## Working protocol for every new chat
-Read `AGENTS.md`, this document, `skills.md`, `PROGRESS.md`, then the docs folder before touching code. Check GitHub state. Conclude each completed task by writing tested facts into `PROGRESS.md`; move only stable decisions here. If repository write permission is absent, explicitly say so and supply ready-to-commit content.
+## Утверждённые инженерные решения
 
-## Verified repo and technical findings (2026-11-14)
-- The seven initial docs were published by user upload and verified in `main` at commit `5066088c43326f06d6654c1dc52dd211945bdcb2`.
-- ChatGPT GitHub connector can read but cannot write this repository (HTTP 403); do not claim subsequent local patch files are in GitHub unless independently verified.
-- Current OpenVPN 3 Core `master` audit snapshot: `0c1ce172fe918b05463d71e682a0c2f2d8fe7899` (2026-11-04); not a selected production pin. Dual AGPLv3/MPL 2.0, dependency license review pending.
-- Apple TN3134 documents packet tunnel providers on iOS, tvOS 17+, visionOS 1+; account entitlements/device builds remain unverified. watchOS local tunnel support is not promised.
-- A local SwiftPM foundation now exists, using Swift tools 6.0 and **provisional** iOS 16/macOS 13 package floors, with two modules `MYCODEX` and `MYCODEXConfiguration`. Portable tests were executed on Linux Swift 6.2.1 (8 passed). No Apple build and no VPN tunnel.
-- Licensing and final supported platform baseline remain undecided. The repository must not vendor upstream OpenVPNAdapter source blindly.
+1. Swift Package Manager как основной способ подключения.
+2. Swift-first публичный API, современные модели состояний и в будущем `async/await`.
+3. Движок изолировать за компактным C/C++ ABI; не переносить старый Obj-C слой без анализа лицензий.
+4. Apple `NetworkExtension` и системный VPN entitlement — обязательны; приватные API запрещены.
+5. Разнести хост-менеджер VPN, Packet Tunnel Provider, C++-движок и парсер конфигурации.
+6. Контекст между чатами хранить в версии GitHub, не рассчитывать на автоматическую память.
+7. Любой вывод об Apple-совместимости подкреплять Xcode/device тестами.
+
+## Реализовано и ограничения
+
+- SwiftPM: `MYCODEX` (модели и состояния), `MYCODEXConfiguration` (ограниченный `.ovpn`-инспектор).
+- Локально добавлен `COpenVPNBridge`: C++20 и экспортируемый C ABI. `OpenVPNNativeBridge.isOpenVPNCoreLinked == false` до реального подключения ядра.
+- Улучшенный инспектор `.ovpn` извлекает `remote`, `proto`, `<connection>` и пропускает inline-блоки — **не является полным парсером или валидатором безопасности**.
+- Swift tools 6.0, предварительные минимумы iOS 16 и macOS 13 — пока без Apple-сборки.
+- Библиотеки OpenVPN 3 Core, Packet Tunnel Provider, ключевое хранилище, VPN-транспорт, UDP/TCP-соединения, DNS и реальный reconnect **пока не реализованы**.
+
+## Целевые платформы
+
+- Основной приоритет: iOS, iPadOS, macOS.
+- Отдельная верификация: tvOS, visionOS; нужны платформенная поддержка и entitlement.
+- watchOS: локальное туннелирование не обещается без подтверждения Apple API.
+
+## Открытые решения
+
+- Версия и схема сборки OpenVPN 3 Core, лицензирование и транзитивные зависимости.
+- Минимальные версии ОС, Xcode/Swift, архитектуры и поддерживаемые Apple-платформы.
+- Модель доступа к Keychain/App Group, ownership native handles, callbacks, отмена, обмен пакетами.
+- Источниковая или бинарная доставка, XCFramework, образец приложения/расширения.
+- Compatibility façade для потребителей OpenVPNAdapter.
+
+**Следующая задача:** воспроизводимая сборка OpenVPN 3 Core на macOS с корректным лицензированием, затем реализация реального `TunBuilderBase` и Packet Tunnel Provider. См. `docs/CORE_INTEGRATION.md` и `PROGRESS.md`.

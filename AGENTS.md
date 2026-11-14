@@ -1,24 +1,29 @@
-# Instructions for AI agents — MYCODEX
+# MYCODEX — обязательные правила для AI-агентов
 
-This file is the mandatory entry point for ChatGPT, Codex, and other assistants working in this repository.
+Это инструкция для ChatGPT, Codex и других инструментов, работающих над репозиторием. Язык всех ответов, документации, записей журнала и комментариев по умолчанию — **русский**. Названия Swift-типов, API, путей и команд сохраняются на английском.
 
-## Session start
-1. Read `memory.md`, `skills.md`, `PROGRESS.md`, `docs/ARCHITECTURE.md`, and `docs/ROADMAP.md` in this order; read `docs/RESEARCH.md` and `docs/API_PROPOSAL.md` when working on implementation.
-2. Inspect the actual repository tree and current branch before making claims about implemented functionality.
-3. Respect confirmed decisions in `memory.md`; treat roadmap entries as proposals, not completed work.
-4. Identify one task and acceptance criteria before editing production code.
+## Перед началом задачи
 
-## Session end — mandatory persistent handoff
-1. Update `PROGRESS.md`: date, goal, files touched, changes made, tests (with actual results), blockers, next task.
-2. Update `memory.md` only for durable decisions or newly verified facts, not ephemeral chat commentary.
-3. Update `docs/ARCHITECTURE.md` when components/interfaces or supported-platform decisions change.
-4. Never report a file as committed unless GitHub confirms the write; if write access fails, provide a patch or files and record the blocker.
-5. No secrets, tokens, passwords, private keys, signing certificates, account identifiers, or user data in these documents.
+1. Открой актуальный GitHub `vladislavtemmo/MYCODEX`, проверь дерево текущей ветки.
+2. Прочитай в порядке: `memory.md`, `skills.md`, `PROGRESS.md`, `docs/ARCHITECTURE.md`, `docs/ROADMAP.md`, затем документы, относящиеся к задаче.
+3. Сверь описание проекта с реальным кодом. Предложения не считай уже реализованными.
+4. Выбери ограниченную задачу и проверяемые критерии её завершения.
+5. Перед интеграцией внешнего кода проверь текущую лицензию и точный commit/tag зависимости.
 
-## Technical principles
-- Swift-first public API; keep OpenVPN engine behind a narrow C/C++ bridge.
-- Apple NetworkExtension controls tunnels and permissions; do not use private Apple APIs or claim to bypass entitlements.
-- Platform-specific availability must be verified with Apple SDK and physical/virtual-device tests.
-- Preserve .ovpn interoperability where practical and validate against real servers.
-- Review dependency licensing, especially AGPL/MPL obligations, before integrating upstream code.
-- Never mark tests/builds passed without actually running them; distinguish unit, build, simulator, and device tests.
+## После выполнения задачи
+
+1. **Обнови `PROGRESS.md`**: дата, задача, файлы, результат, тесты и их фактический вывод, ограничения и следующий шаг.
+2. Обнови `memory.md`, только если появились новые устойчивые решения или проверенные факты.
+3. Обнови архитектуру, API и дорожную карту при изменении границ компонентов или статусов.
+4. По возможности **самостоятельно отправь коммит или PR через разрешённый GitHub доступ**. Не изменяй защищённую основную ветку без соблюдения политики репозитория.
+5. Если GitHub возвращает 403, подготовь готовый патч/архив и прямо напиши, что удалённая публикация не состоялась. Не проси токены или пароли в чате.
+6. При работе через другой чат заново прочитай GitHub-документацию; не полагайся на память предыдущей беседы.
+
+## Технические ограничения
+
+- Публичный API проектируется под Swift 6 и безопасную конкурентность; VPN-движок изолирован за небольшим C/C++-мостом.
+- `NetworkExtension` и пользовательские разрешения Apple обязательны. Никаких приватных API или обходов entitlement.
+- Пока ядро не подключено, никогда не объявляй VPN-соединение успешным и не имитируй его в production API.
+- Не записывай в репозиторий пароли, закрытые ключи, provisioning-профили, токены, реальные профили с секретами, персональные данные.
+- Не путай Linux-тесты переносимой части с Xcode-сборкой и тестами на iPhone/Mac.
+- Не обещай совместимость платформ до реальных подтверждённых сборок и проверок.

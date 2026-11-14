@@ -3,8 +3,7 @@ import PackageDescription
 
 let package = Package(
     name: "MYCODEX",
-    // Provisional package floor for the Swift-only foundation. Final Apple
-    // platform minimums must be validated with the tunnel extension on Xcode.
+    // Предварительные минимальные версии. Проверить в Xcode на Apple-устройствах.
     platforms: [
         .iOS(.v16),
         .macOS(.v13)
@@ -14,9 +13,15 @@ let package = Package(
         .library(name: "MYCODEXConfiguration", targets: ["MYCODEXConfiguration"])
     ],
     targets: [
-        .target(name: "MYCODEX"),
+        .target(
+            name: "COpenVPNBridge",
+            publicHeadersPath: "include",
+            cxxSettings: [.headerSearchPath("include")]
+        ),
+        .target(name: "MYCODEX", dependencies: ["COpenVPNBridge"]),
         .target(name: "MYCODEXConfiguration", dependencies: ["MYCODEX"]),
         .testTarget(name: "MYCODEXTests", dependencies: ["MYCODEX"]),
         .testTarget(name: "MYCODEXConfigurationTests", dependencies: ["MYCODEX", "MYCODEXConfiguration"])
-    ]
+    ],
+    cxxLanguageStandard: .cxx20
 )

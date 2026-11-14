@@ -28,3 +28,11 @@ final class OpenVPNFoundationTests: XCTestCase {
         XCTAssertEqual(OpenVPNConnectionState.reconnecting.rawValue, "reconnecting")
     }
 }
+
+extension OpenVPNFoundationTests {
+    func testNativeBridgeABIAndHonestBackendStatus() {
+        XCTAssertEqual(OpenVPNNativeBridge.abiVersion, 1)
+        XCTAssertFalse(OpenVPNNativeBridge.isOpenVPNCoreLinked)
+        XCTAssertEqual(OpenVPNNativeBridge.backendName, "OpenVPN 3 Core: not linked")
+    }
+}

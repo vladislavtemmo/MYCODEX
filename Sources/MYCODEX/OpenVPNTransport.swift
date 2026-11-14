@@ -1,5 +1,5 @@
-/// The underlying OpenVPN transport. A future engine adapter is responsible for
-/// selecting exact IPv4/IPv6 address families and implementing connections.
+/// Используемый OpenVPN транспорт. Конкретные семейства адресов
+/// IPv4/IPv6 и сетевое соединение реализует будущий движок.
 public enum OpenVPNTransport: String, Codable, Hashable, Sendable {
     case udp
     case tcp

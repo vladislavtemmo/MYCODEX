@@ -1,42 +1,41 @@
-# MYCODEX — delivery roadmap
+# MYCODEX — дорожная карта
 
-Every step must have tested evidence before marking COMPLETE. Current statuses are described per task; the initial documentation is published, but the Swift-only source patch is local pending upload.
+Помечать `[x]` только результаты, подтверждённые файлами и реальными проверками. Локальная сборка не означает публикацию в GitHub.
 
-## Phase 0 — bootstrap and investigation
-- [x] Publish prepared Markdown documentation in `main`, read it back through GitHub, confirm commit SHA (`5066088c43326f06d6654c1dc52dd211945bdcb2`).
-- [ ] Complete detailed upstream OpenVPNAdapter API/source/license audit (initial SwiftPM and source layout review recorded in `docs/RESEARCH.md`).
-- [ ] Complete OpenVPN 3 Core audit (current master snapshot and dual-license file identified; dependency inventory and packaging decision pending).
-- [ ] Verify Apple framework/deployment requirements on real Xcode targets (Apple TN3134 review done; final OS/Swift/Xcode baseline still open).
-- [ ] Finalize public tunnel API and migration strategy (initial draft in `docs/API_PROPOSAL.md`).
+## Этап 0 — контекст и исследование
 
-**Exit criteria:** written decisions with linked evidence and a small build/packaging spike plan.
+- [x] Базовые документы загружены в GitHub и проверены в ветке `main`.
+- [x] Установлено, что исходный OpenVPNAdapter архивирован, а OpenVPN 3 Core развивается отдельно.
+- [x] Проверены названия ключевых API: `client/ovpncli.hpp`, `OpenVPNClient`, `TunBuilderBase`, лицензии AGPL/MPL.
+- [ ] Полная ревизия transitive dependencies и юридический план распространения.
+- [ ] Проверка минимальных Apple OS и доступности entitlement на рабочих Xcode/device.
 
-## Phase 1 — buildable foundation
-- [ ] Publish Swift Package manifest, modules and test script (created and Linux-tested in local patch; GitHub upload pending).
-- [ ] Create/verify the C/C++ bridge and OpenVPN Core linkage on macOS.
-- [ ] Implement typed configuration model and validation with unit tests.
-- [ ] Run and pin CI matrix on supported Apple build targets (portable macOS/Linux workflow created in local patch; not executed on GitHub).
+## Этап 1 — SwiftPM и нативный интерфейс
 
-**Exit criteria:** reproducible build and passing tests on recorded destinations.
+- [x] Swift-пакет `MYCODEX` / `MYCODEXConfiguration` с моделями и тестами.
+- [x] Инспектор `.ovpn` с `remote`, `proto`, `<connection>` и защитой от вывода содержимого профиля в `description`.
+- [x] C++20 target `COpenVPNBridge` и публичный Swift `OpenVPNNativeBridge` с детектированием отсутствующего движка.
+- [ ] Подтверждённая сборка пакета на macOS/Xcode, работа CI в GitHub.
+- [ ] Интеграция актуального OpenVPN 3 Core и сборка с pinned зависимостями.
+- [ ] Полноценная валидация профиля через настоящий OpenVPN 3 Core.
 
-## Phase 2 — first tunnel
-- [ ] Build example app + Packet Tunnel extension with proper entitlement setup.
-- [ ] Implement connect, disconnect, error propagation and cancellation.
-- [ ] Validate UDP and TCP with real OpenVPN endpoints and a compatible SoftEther test environment.
-- [ ] Add secure credential handling and no-secret logs.
+**Готовность этапа:** реальная проверка Xcode, C++ core linked, автоматизированные тесты и согласованное лицензирование.
 
-**Exit criteria:** real-device connection evidence (iOS/iPadOS, macOS), diagnostics and teardown tests.
+## Этап 2 — первый реальный туннель
 
-## Phase 3 — resilience and compatibility
-- [ ] Network transitions, route/DNS/MTU, IPv6 and reconnect.
-- [ ] Configuration fixtures and backwards-compatibility adapter where practical.
-- [ ] Fault-injection, soak, resource and regression tests.
+- [ ] Приложение-пример и Packet Tunnel Provider с entitlement.
+- [ ] Подключение/отключение, отмена, ошибки и безопасное хранение credentials.
+- [ ] UDP/TCP на реальных OpenVPN и совместимых SoftEther-серверах.
+- [ ] Проверка DNS/маршрутов/MTU и окончания сессии.
 
-**Exit criteria:** documented compatibility matrix and reproducible test results.
+## Этап 3 — стабильность
 
-## Phase 4 — Apple ecosystem expansion
-- [ ] Investigate/validate tvOS and visionOS independently.
-- [ ] Record watchOS API limitation decision; offer only proven feasible interactions.
-- [ ] Produce sample apps, migration guide, reference docs, license notices and versioned releases.
+- [ ] Переключение Wi‑Fi/cellular, reconnect, IPv4/IPv6, смена сети.
+- [ ] Регрессионные, нагрузочные и ресурсные тесты.
+- [ ] Руководство миграции пользователей OpenVPNAdapter.
 
-**Exit criteria:** release artifacts and support matrix based on measured builds/devices.
+## Этап 4 — расширение экосистемы Apple
+
+- [ ] Экспериментальная проверка tvOS и visionOS.
+- [ ] Документирование реальных ограничений watchOS.
+- [ ] Версионирование, релиз, поддерживаемая матрица платформ и лицензии.
