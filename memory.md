@@ -67,3 +67,17 @@
 - В этом окружении исходники OpenVPN 3 Core нельзя получить командой Git из-за отсутствия разрешения DNS/сети; тест macOS необходим.
 
 **Следующая задача:** фактическая сборка OpenVPN 3 Core на macOS и проверка лицензирования/зависимостей, затем реальный `TunBuilderBase` и Packet Tunnel Provider. См. `docs/CORE_INTEGRATION.md`, `docs/OPENVPN3_BUILD.md` и `PROGRESS.md`.
+
+
+## Windows-проверка 2026-11-15
+- OpenVPN 3 Core SHA 0c1ce172fe918b05463d71e682a0c2f2d8fe7899 успешно собран и протестирован на Windows.
+- Реальный C ABI работает с проверкой профилей, режим без ядра также проверен.
+- SwiftPM по умолчанию продолжает работать без встроенного OpenVPN 3 Core.
+- Следующий этап: Swift API и затем Apple NetworkExtension.
+
+
+## Windows-проверка 2026-11-15
+- OpenVPN 3 Core SHA 0c1ce172fe918b05463d71e682a0c2f2d8fe7899 успешно собран и протестирован на Windows.
+- Реальный C ABI работает с проверкой профилей, режим без ядра также проверен.
+- SwiftPM по умолчанию продолжает работать без встроенного OpenVPN 3 Core.
+- Следующий этап: Swift API и затем Apple NetworkExtension.

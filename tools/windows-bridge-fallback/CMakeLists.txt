@@ -1,0 +1,5 @@
+cmake_minimum_required(VERSION 3.20)
+project(MYCODEXBridgeFallback LANGUAGES C CXX)
+set(CMAKE_CXX_STANDARD 20)
+add_executable(mycodex_bridge_fallback main.cpp "${MYCODEX_SDK_ROOT}/Sources/COpenVPNBridge/MYCODEXBridge.cpp")
+target_include_directories(mycodex_bridge_fallback PRIVATE "${MYCODEX_SDK_ROOT}/Sources/COpenVPNBridge/include")

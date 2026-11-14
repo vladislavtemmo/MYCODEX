@@ -83,3 +83,27 @@
 - Следующий шаг:
 
 Старые записи не удалять — дописывать новые и актуализировать только статус наверху.
+
+
+## 2026-11-15 — Windows: реальный C ABI OpenVPN 3 Core
+- Ветка: feat/windows-core-probe.
+- Зафиксированная ревизия ядра: 0c1ce172fe918b05463d71e682a0c2f2d8fe7899.
+- C ABI с флагом MYCODEX_WITH_OPENVPN3 компилируется и вызывает OpenVPNClientHelper::eval_config.
+- Проверены принятие тестового профиля, отклонение профиля без remote и некорректные аргументы.
+- Это только предварительная проверка конфигурации, не VPN-соединение.
+- Xcode, iOS/macOS, NetworkExtension и реальный VPN-туннель не проверены.
+- Изменения локальные, коммит и публикация ещё не подтверждены.
+
+
+### 2026-11-15 — Windows: проверка режима без ядра
+- Успешно собран резервный C ABI без MYCODEX_WITH_OPENVPN3.
+- Проверено: ABI=1, CORE_LINKED=0, PROFILE_RESULT=-2, EMPTY_RESULT=-1.
+- Подробности: docs/WINDOWS_CORE_VALIDATION.md.
+- Swift/Xcode/реальный VPN-туннель не проверены.
+
+
+### 2026-11-15 — Windows: проверка режима без ядра
+- Успешно собран резервный C ABI без MYCODEX_WITH_OPENVPN3.
+- Проверено: ABI=1, CORE_LINKED=0, PROFILE_RESULT=-2, EMPTY_RESULT=-1.
+- Подробности: docs/WINDOWS_CORE_VALIDATION.md.
+- Swift/Xcode/реальный VPN-туннель не проверены.
