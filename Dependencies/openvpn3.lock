@@ -1,0 +1,4 @@
+# Ревизия для исследовательской сборки. НЕ утверждена для релиза.
+repository=https://github.com/OpenVPN/openvpn3.git
+revision=0c1ce172fe918b05463d71e682a0c2f2d8fe7899
+purpose=integration-spike-only

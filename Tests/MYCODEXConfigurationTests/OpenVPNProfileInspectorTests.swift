@@ -93,3 +93,50 @@ extension OpenVPNProfileInspectorTests {
         XCTAssertThrowsError(try OpenVPNProfileInspector.remoteEndpoints(in: extraClosing))
     }
 }
+
+extension OpenVPNProfileInspectorTests {
+    func testQuotedHostAndProtoAreParsed() throws {
+        let profile = try OpenVPNProfile(ovpnText: """
+        client
+        proto "tcp-client"
+        remote 'vpn.example.org' "443" # remote ignored.example 53
+        """)
+        let endpoints = try OpenVPNProfileInspector.remoteEndpoints(in: profile)
+        XCTAssertEqual(endpoints.count, 1)
+        XCTAssertEqual(endpoints[0].hostname, "vpn.example.org")
+        XCTAssertEqual(endpoints[0].port, 443)
+        XCTAssertEqual(endpoints[0].transport, .tcp)
+    }
+
+    func testCommentMarkersInInlineCertificateAreIgnored() throws {
+        let profile = try OpenVPNProfile(ovpnText: """
+        <tls-crypt>
+        # remote fake.example.org 1194
+        remote fake.example.net 555
+        </tls-crypt>
+        remote vpn.example.org 1194 ; comment
+        """)
+        XCTAssertEqual(try OpenVPNProfileInspector.remoteEndpoints(in: profile).map(\.hostname), ["vpn.example.org"])
+    }
+
+    func testMalformedQuotedDirectiveFailsWithoutExposingSecret() throws {
+        let profile = try OpenVPNProfile(ovpnText: "remote 'vpn.example.org 1194")
+        XCTAssertThrowsError(try OpenVPNProfileInspector.remoteEndpoints(in: profile)) { error in
+            XCTAssertEqual(error as? OpenVPNInspectionError, .malformedDirective(line: 1))
+            XCTAssertFalse(String(describing: error).contains("vpn.example.org"))
+        }
+    }
+
+    func testUnknownClosingBlockFails() throws {
+        let profile = try OpenVPNProfile(ovpnText: "</cert>\nremote vpn.example.org 1194")
+        XCTAssertThrowsError(try OpenVPNProfileInspector.remoteEndpoints(in: profile)) { error in
+            XCTAssertEqual(error as? OpenVPNInspectionError, .invalidBlock(line: 1))
+        }
+    }
+
+    func testDoubleQuotedHostnameAndInlineComment() throws {
+        let profile = try OpenVPNProfile(ovpnText: "remote \"vpn.example.org\" 443 tcp-client ; disabled endpoint follows")
+        let endpoints = try OpenVPNProfileInspector.remoteEndpoints(in: profile)
+        XCTAssertEqual(endpoints.map(\.hostname), ["vpn.example.org"])
+    }
+}

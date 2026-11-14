@@ -62,11 +62,14 @@ public enum OpenVPNProfileInspector {
                     embeddedBlock = name
                     continue
                 }
+                if lowercased.hasPrefix("</"), lowercased.hasSuffix(">") {
+                    throw OpenVPNInspectionError.invalidBlock(line: lineNumber)
+                }
 
-                let fields = line.split(whereSeparator: { $0.isWhitespace }).map(String.init)
-                let tokens = Array(fields.prefix {
-                    !$0.hasPrefix("#") && !$0.hasPrefix(";")
-                })
+                // Лексический разбор поддерживает аргументы в кавычках и
+                // экранирование символов. Комментарий начинается вне кавычек
+                // только с границы токена: не разбираем профиль через split().
+                let tokens = try tokenize(line, lineNumber: lineNumber)
                 guard let command = tokens.first?.lowercased() else { continue }
 
                 switch command {
@@ -137,6 +140,61 @@ public enum OpenVPNProfileInspector {
         }
     }
 
+    /// Разбивает строку OpenVPN-конфигурации на токены без вывода сырого ввода.
+    /// Не претендует на полноценное воспроизведение лексера OpenVPN 3 Core.
+    private static func tokenize(_ line: String, lineNumber: Int) throws -> [String] {
+        var tokens: [String] = []
+        var token = ""
+        var active = false
+        var quotedBy: Character?
+        var escaped = false
+
+        for character in line {
+            if escaped {
+                token.append(character)
+                active = true
+                escaped = false
+                continue
+            }
+            if character == "\\" {
+                active = true
+                escaped = true
+                continue
+            }
+            if let quote = quotedBy {
+                if character == quote {
+                    quotedBy = nil
+                } else {
+                    token.append(character)
+                }
+                continue
+            }
+            if character == "\"" || character == "'" {
+                quotedBy = character
+                active = true
+                continue
+            }
+            if character.isWhitespace {
+                if active {
+                    tokens.append(token)
+                    token = ""
+                    active = false
+                }
+                continue
+            }
+            if (character == "#" || character == ";") && !active {
+                break
+            }
+            token.append(character)
+            active = true
+        }
+        guard quotedBy == nil && !escaped else {
+            throw OpenVPNInspectionError.malformedDirective(line: lineNumber)
+        }
+        if active { tokens.append(token) }
+        return tokens
+    }
+
     private static func parseTransport(_ raw: String) -> OpenVPNTransport? {
         switch raw.lowercased() {
         case "udp", "udp4", "udp6": return .udp
@@ -152,5 +210,6 @@ public enum OpenVPNInspectionError: Error, Equatable, Sendable {
     case invalidRemote(line: Int)
     case invalidTransport(line: Int)
     case invalidBlock(line: Int)
+    case malformedDirective(line: Int)
     case unclosedBlock
 }

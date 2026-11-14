@@ -56,3 +56,14 @@ swift build -c release
 ## Лицензии
 
 Оригинальный OpenVPNAdapter имеет лицензию AGPLv3, а OpenVPN 3 Core доступен по AGPLv3 или MPL 2.0. Перед включением исходников ядра, OpenSSL и других зависимостей требуется полная проверка совместимости лицензий и требований распространения. В этом репозитории пока **нет исходников OpenVPN 3 Core**.
+
+
+## Подготовка OpenVPN 3 Core (v0.3)
+
+В дополнение к SwiftPM-пакету подготовлены **исследовательские** скрипты `scripts/fetch-openvpn3.sh` и `scripts/build-openvpn3-macos.sh`, а также `Dependencies/openvpn3.lock`. Указанный SHA служит только для воспроизводимого эксперимента, не для production.
+
+- [Сборка OpenVPN 3 Core на Mac](docs/OPENVPN3_BUILD.md)
+- [Матрица Apple-платформ](docs/APPLE_PLATFORM_MATRIX.md)
+- [Аудит зависимостей и лицензий](docs/DEPENDENCY_AUDIT.md)
+
+Пока `OpenVPNNativeBridge.isOpenVPNCoreLinked` возвращает `false`: никакой реальный VPN-трафик не отправляется. Сначала нужно собрать upstream OpenVPN 3 Core на Mac, затем интегрировать C++-клиент и `NEPacketTunnelProvider` с entitlement.
