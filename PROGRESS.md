@@ -229,3 +229,13 @@
 - Linux x86_64 Swift 6.2.1: SwiftPM XCTest 46/46 PASS; Release build PASS. macOS OpenVPN 3 нативную сборку пользователь должен проверить отдельно.
 - Не реализовано: рабочий socketpair/FD, Core data-plane, подтверждение Apple setTunnelNetworkSettings из Core callback, NetworkExtension end-to-end и реальное VPN соединение.
 - Следующий шаг: socketpair на границе OpenVPN FD / Apple NEPacketTunnelFlow, точная остановка потоков и квоты пакетов.
+
+## 2026-11-15 — этап 8.3B2D2B: socketpair-backed packet bridge
+- База: `feat/apple-core-integration@b99979a`.
+- Добавлена переносимая для POSIX реализация `AF_UNIX/SOCK_DGRAM` с двумя fd, неблокирующим pump, ограничением числа пакетов, явным backpressure и сохранением датаграммы при насыщении очереди.
+- C ABI: `mycodex_tun_socket_{create,dup_core_fd,pump,close,destroy}`; на Windows stub без изменения существующего API.
+- Swift `MYCODEXTunSocketTransport` удерживает native bridge; дескриптор Core возвращается как вызывающим кодом закрываемый `dup`.
+- Локальная проверка Linux x86_64 Swift 6.2.1: отдельные 4 XCTest PASS, Release PASS; нативный Swift→C ABI→Unix socketpair probe PASS.
+- Проверка AppleClang/OpenVPN 3 Core на macOS ещё требуется; новый скрипт запускает предыдущие интеграционные тесты и packet probe.
+- НЕ реализовано: привязка fd к `tun_builder_establish()`, автоматическая pump/wakeup интеграция, сетевые настройки Apple, подключение Core к NEPacketTunnelFlow, подписанный extension, реальный VPN.
+- Следующее: связать жизненный цикл ExternalTun FD с `NEPacketTunnelProvider`, получением pushed settings, ACK применения сетевых настроек и безопасным teardown.

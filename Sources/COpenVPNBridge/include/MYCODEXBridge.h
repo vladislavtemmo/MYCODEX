@@ -114,6 +114,28 @@ int32_t mycodex_external_tun_factory_compiled(void);
 /* Test-only fixture, must not be available in production builds. */
 int32_t mycodex_external_tun_factory_test_fixture(mycodex_client_handle *handle);
 #endif
+
+/* POSIX AF_UNIX/SOCK_DGRAM packet transport. This is NOT an active TUN.
+ * The transport borrows the packet bridge; it MUST be destroyed before bridge.
+ * The returned core FD is a duplicate owned/closed by its caller. Core/transport
+ * endpoints preserve IP datagram boundaries. pump is nonblocking; caller drives
+ * it on an appropriate queue/wakeup, never a busy main-thread polling loop.
+ * Caller must serialize close/destroy with pump and all other calls. Pump and
+ * dup are protected by an internal mutex, but destroy cannot be concurrent.
+ * create: NULL on invalid bridge / POSIX setup failure (Windows unsupported).
+ * dup_core_fd: >=0 = descriptor, -1=argument, -3=closed, -4=OS failure.
+ * pump: 0=success, -1=arguments, -2=invalid packet, -3=closed,
+ * -4=OS failure, -5=bridge failure. Counters are successful packet moves.
+ * 0 means no progress if both counters are zero. No packet silently dropped
+ * on queue saturation: at most one pending packet per direction is retained.
+ */
+typedef struct mycodex_tun_socket_transport mycodex_tun_socket_transport;
+mycodex_tun_socket_transport *mycodex_tun_socket_create(mycodex_packet_bridge *bridge);
+int32_t mycodex_tun_socket_dup_core_fd(mycodex_tun_socket_transport *transport);
+int32_t mycodex_tun_socket_pump(mycodex_tun_socket_transport *transport,
+    uint32_t max_per_direction, uint32_t *into_core, uint32_t *into_system);
+int32_t mycodex_tun_socket_close(mycodex_tun_socket_transport *transport);
+void mycodex_tun_socket_destroy(mycodex_tun_socket_transport *transport);
 #ifdef __cplusplus
 }
 #endif
