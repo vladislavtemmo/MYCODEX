@@ -36,6 +36,10 @@ public enum OpenVPNClientRunState: Int32, Sendable, Equatable {
 public final class OpenVPNClient {
     private let handle: OpaquePointer
 
+    // Internal borrowed handle for synchronous TunBuilder snapshot creation.
+    // Never retain it or use it concurrently with client deinitialization.
+    var handleForTunCapture: OpaquePointer { handle }
+
     public init() throws {
         guard OpenVPNNativeBridge.isOpenVPNCoreLinked else {
             throw OpenVPNClientError.coreUnavailable

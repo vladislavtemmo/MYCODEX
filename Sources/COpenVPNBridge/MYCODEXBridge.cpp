@@ -47,6 +47,8 @@ return -2;
 #include <mutex>
 #include <thread>
 #include <openssl/crypto.h>
+#include "MYCODEXTunCapture.hpp"
+#include <atomic>
 
 class MYCODEXNativeClient final : public openvpn::ClientAPI::OpenVPNClient {
 public:
@@ -73,6 +75,131 @@ public:
         r.error = true;
         r.errorText = "External PKI is not implemented";
     }
+
+    // Capture actual TunBuilderBase callbacks. This does NOT provide a TUN FD.
+    // The capture becomes readable only after establish() was called, which
+    // still rejects the tunnel. Worker enablement stays behind -6 gating.
+    bool tun_builder_new() override {
+        std::lock_guard<std::mutex> lock(tun_mutex_);
+        tun_records_.clear();
+        tun_collecting_ = true;
+        tun_ready_ = false;
+        return true;
+    }
+
+    bool tun_builder_set_layer(int layer) override { return layer == 3; }
+
+    bool tun_builder_set_remote_address(const std::string &address, bool) override {
+        return add_tun_record(MYCODEXTunKind::Remote, 0, address);
+    }
+
+    bool tun_builder_add_address(const std::string &address, int prefix,
+                                 const std::string &, bool ipv6, bool net30) override {
+        // net30 topology needs separate validation and gateway handling.
+        return !net30 && valid_prefix(ipv6, prefix) &&
+               add_tun_record(ipv6 ? MYCODEXTunKind::IPv6Address : MYCODEXTunKind::IPv4Address,
+                              prefix, address);
+    }
+
+    bool tun_builder_reroute_gw(bool ipv4, bool ipv6, unsigned int) override {
+        if (!ipv4 && !ipv6) return false;
+        if (ipv4 && !add_tun_record(MYCODEXTunKind::RedirectIPv4, 0, "")) return false;
+        return !ipv6 || add_tun_record(MYCODEXTunKind::RedirectIPv6, 0, "");
+    }
+
+    bool tun_builder_add_route(const std::string &address, int prefix, int, bool ipv6) override {
+        return valid_prefix(ipv6, prefix) &&
+               add_tun_record(ipv6 ? MYCODEXTunKind::IPv6Route : MYCODEXTunKind::IPv4Route,
+                              prefix, address);
+    }
+
+    bool tun_builder_exclude_route(const std::string &address, int prefix, int, bool ipv6) override {
+        return valid_prefix(ipv6, prefix) &&
+               add_tun_record(ipv6 ? MYCODEXTunKind::IPv6Exclude : MYCODEXTunKind::IPv4Exclude,
+                              prefix, address);
+    }
+
+    bool tun_builder_set_mtu(int mtu) override {
+        return mtu >= 576 && mtu <= 9000 &&
+               add_tun_record(MYCODEXTunKind::MTU, mtu, "");
+    }
+
+    bool tun_builder_set_dns_options(const openvpn::DnsOptions &dns) override {
+        // Apple NEDNSSettings cannot transparently implement OpenVPN DoH/DoT,
+        // per-server search domains, nonstandard DNS ports, or DNSSEC.
+        // Reject unsupported options instead of silently changing semantics.
+        if (!dns.search_domains.empty()) return false;
+        MYCODEXTunRecords replacement;
+        try {
+            for (const auto &[priority, server] : dns.servers) {
+                (void)priority;
+                if (!server.domains.empty() ||
+                    (server.transport != openvpn::DnsServer::Transport::Unset &&
+                     server.transport != openvpn::DnsServer::Transport::Plain) ||
+                    (server.dnssec != openvpn::DnsServer::Security::Unset &&
+                     server.dnssec != openvpn::DnsServer::Security::No)) return false;
+                for (const auto &address : server.addresses) {
+                    if (address.port != 0 && address.port != 53) return false;
+                    if (address.address.empty() || address.address.size() >= 256) return false;
+                    replacement.push_back({MYCODEXTunKind::DNS, 0, address.address});
+                }
+            }
+            std::lock_guard<std::mutex> lock(tun_mutex_);
+            if (!tun_collecting_) return false;
+            MYCODEXTunRecords next;
+            for (const auto &record : tun_records_) {
+                if (record.kind != MYCODEXTunKind::DNS) next.push_back(record);
+            }
+            if (next.size() + replacement.size() > 128) return false;
+            next.insert(next.end(), replacement.begin(), replacement.end());
+            tun_records_.swap(next);
+            return true;
+        } catch (...) { return false; }
+    }
+
+    // A real Apple tunnel must explicitly implement disallowed families and
+    // DNS leak protections before such Core options can be accepted.
+    bool tun_builder_set_allow_family(int, bool allow) override { return allow; }
+    bool tun_builder_set_allow_local_dns(bool allow) override { return allow; }
+
+    int tun_builder_establish() override {
+        std::lock_guard<std::mutex> lock(tun_mutex_);
+        tun_ready_ = tun_collecting_ && !tun_records_.empty();
+        return -1; // No actual TUN descriptor: connection always fails closed.
+    }
+    bool tun_builder_persist() override { return false; }
+    void tun_builder_teardown(bool) override {
+        std::lock_guard<std::mutex> lock(tun_mutex_);
+        tun_collecting_ = false;
+        tun_ready_ = false;
+    }
+
+    bool tun_snapshot(MYCODEXTunRecords &out) const {
+        std::lock_guard<std::mutex> lock(tun_mutex_);
+        if (!tun_ready_) return false;
+        out = tun_records_;
+        return true;
+    }
+
+private:
+    static bool valid_prefix(bool ipv6, int prefix) {
+        return prefix >= 0 && prefix <= (ipv6 ? 128 : 32);
+    }
+    bool add_tun_record(MYCODEXTunKind kind, int32_t prefix, const std::string &value) {
+        if (value.size() >= 256 || value.find('\0') != std::string::npos) return false;
+        try {
+            std::lock_guard<std::mutex> lock(tun_mutex_);
+            if (!tun_collecting_ || tun_records_.size() >= 128) return false;
+            tun_records_.push_back({kind, prefix, value});
+            return true;
+        } catch (...) { return false; }
+    }
+
+    mutable std::mutex tun_mutex_;
+    MYCODEXTunRecords tun_records_;
+    bool tun_collecting_ = false;
+    bool tun_ready_ = false;
+public:
 
     int32_t poll_event(char *name, size_t capacity, int32_t *flags) {
         std::lock_guard<std::mutex> lock(events_mutex_);
@@ -372,3 +499,79 @@ extern "C" int32_t mycodex_client_tunnel_available(void) {
     return 0;
 #endif
 }
+
+// Deep-copied, immutable snapshot. It outlives the client handle; destroy it
+// explicitly. A capture is not evidence that Apple settings were applied.
+struct mycodex_tun_snapshot {
+#if defined(MYCODEX_WITH_OPENVPN3)
+    MYCODEXTunRecords records;
+#endif
+};
+
+extern "C" mycodex_tun_snapshot *mycodex_client_tun_snapshot_create(mycodex_client_handle *handle) {
+#if defined(MYCODEX_WITH_OPENVPN3)
+    if (!handle) return nullptr;
+    try {
+        auto snapshot = std::make_unique<mycodex_tun_snapshot>();
+        if (!handle->client->tun_snapshot(snapshot->records)) return nullptr;
+        return snapshot.release();
+    } catch (...) { return nullptr; }
+#else
+    (void)handle;
+    return nullptr;
+#endif
+}
+
+extern "C" size_t mycodex_tun_snapshot_count(const mycodex_tun_snapshot *snapshot) {
+#if defined(MYCODEX_WITH_OPENVPN3)
+    return snapshot ? snapshot->records.size() : 0;
+#else
+    (void)snapshot;
+    return 0;
+#endif
+}
+
+extern "C" int32_t mycodex_tun_snapshot_get(const mycodex_tun_snapshot *snapshot,
+    size_t index, int32_t *kind, int32_t *prefix, char *value, size_t capacity) {
+    if (!snapshot || !kind || !prefix || !value || !capacity) return -1;
+#if defined(MYCODEX_WITH_OPENVPN3)
+    if (index >= snapshot->records.size()) return -1;
+    const auto &record = snapshot->records[index];
+    if (capacity <= record.value.size()) return -2;
+    *kind = static_cast<int32_t>(record.kind);
+    *prefix = record.prefix;
+    std::memcpy(value, record.value.data(), record.value.size());
+    value[record.value.size()] = '\0';
+    return 0;
+#else
+    return -3;
+#endif
+}
+
+extern "C" void mycodex_tun_snapshot_destroy(mycodex_tun_snapshot *snapshot) {
+    delete snapshot;
+}
+
+// Compiled only in the separate macOS native test library. Never expose
+// synthetic pushed settings in production or enable the real tunnel flag.
+#if defined(MYCODEX_TUN_CAPTURE_TESTING) && defined(MYCODEX_WITH_OPENVPN3)
+extern "C" int32_t mycodex_client_tun_test_fixture(mycodex_client_handle *handle) {
+    if (!handle) return -1;
+    try {
+        auto &client = *handle->client;
+        if (!client.tun_builder_new() || !client.tun_builder_set_layer(3) ||
+            !client.tun_builder_set_remote_address("198.51.100.10", false) ||
+            !client.tun_builder_add_address("10.8.0.2", 24, "", false, false) ||
+            !client.tun_builder_add_address("2001:db8::2", 64, "", true, false) ||
+            !client.tun_builder_add_route("172.16.0.0", 12, -1, false) ||
+            !client.tun_builder_exclude_route("192.168.0.0", 16, -1, false) ||
+            !client.tun_builder_reroute_gw(true, true, 0) ||
+            !client.tun_builder_set_mtu(1400)) return -3;
+        openvpn::DnsOptions dns;
+        dns.servers[0].addresses.emplace_back("1.1.1.1");
+        if (!client.tun_builder_set_dns_options(dns)) return -3;
+        if (client.tun_builder_establish() != -1) return -3;
+        return 0;
+    } catch (...) { return -3; }
+}
+#endif

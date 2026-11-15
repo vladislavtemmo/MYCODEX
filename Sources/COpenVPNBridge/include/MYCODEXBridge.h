@@ -85,6 +85,26 @@ int32_t mycodex_packet_bridge_stats(mycodex_packet_bridge *bridge,
     int32_t direction, uint32_t *packets, size_t *bytes);
 int32_t mycodex_packet_bridge_close(mycodex_packet_bridge *bridge);
 void mycodex_packet_bridge_destroy(mycodex_packet_bridge *bridge);
+/* Captured OpenVPN TunBuilderBase settings (NOT a live TUN interface).
+ * A snapshot owns a deep copy; it is safe to destroy the client after creation.
+ * create returns NULL when callbacks have not reached establish().
+ * get: 0=record, -1=arguments/index, -2=buffer too small.
+ * record kinds: 1=remote, 2=v4 addr, 3=v6 addr, 4=v4 route, 5=v6 route,
+ * 6=v4 excluded, 7=v6 excluded, 8=DNS IP, 9=MTU (in prefix),
+ * 10=IPv4 default route, 11=IPv6 default route. Values max 255 bytes.
+ * Records do not include credentials or raw packet data. No call may overlap
+ * destruction of the parent client handle during snapshot creation.
+ */
+typedef struct mycodex_tun_snapshot mycodex_tun_snapshot;
+mycodex_tun_snapshot *mycodex_client_tun_snapshot_create(mycodex_client_handle *handle);
+size_t mycodex_tun_snapshot_count(const mycodex_tun_snapshot *snapshot);
+int32_t mycodex_tun_snapshot_get(const mycodex_tun_snapshot *snapshot,
+    size_t index, int32_t *kind, int32_t *prefix, char *value, size_t capacity);
+void mycodex_tun_snapshot_destroy(mycodex_tun_snapshot *snapshot);
+#if defined(MYCODEX_TUN_CAPTURE_TESTING)
+/* Test-only direct callback fixture, compiled out of production binaries. */
+int32_t mycodex_client_tun_test_fixture(mycodex_client_handle *handle);
+#endif
 #ifdef __cplusplus
 }
 #endif
