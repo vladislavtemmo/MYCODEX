@@ -8,4 +8,4 @@ add_library(mycodex_core SHARED "${MYCODEX_SDK_ROOT}/Sources/COpenVPNBridge/MYCO
 target_include_directories(mycodex_core PRIVATE "${MYCODEX_SDK_ROOT}/Sources/COpenVPNBridge/include")
 target_compile_definitions(mycodex_core PRIVATE MYCODEX_WITH_OPENVPN3 OPENVPN_FORCE_TUN_NULL)
 add_core_dependencies(mycodex_core)
-target_link_options(mycodex_core PRIVATE "/EXPORT:mycodex_bridge_abi_version" "/EXPORT:mycodex_bridge_core_linked" "/EXPORT:mycodex_bridge_backend_name" "/EXPORT:mycodex_bridge_validate_profile")
+target_link_options(mycodex_core PRIVATE "/EXPORT:mycodex_bridge_abi_version" "/EXPORT:mycodex_bridge_core_linked" "/EXPORT:mycodex_bridge_backend_name" "/EXPORT:mycodex_bridge_validate_profile" "/EXPORT:mycodex_client_create" "/EXPORT:mycodex_client_configure" "/EXPORT:mycodex_client_destroy")
