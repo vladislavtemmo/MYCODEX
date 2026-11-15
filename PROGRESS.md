@@ -219,3 +219,13 @@
 - Проверено на Linux x86_64, Swift 6.2.1: 45/45 XCTest PASS; `swift build -c release` PASS. Apple-специфичный код прошёл типовую проверку с тестовой заглушкой NetworkExtension (не является проверкой Apple SDK).
 - macOS SDK/Xcode и реальные Apple-устройства требуют отдельных тестов. Windows regression и реальное VPN-подключение ещё не проверены.
 - Следующее: ExternalTun/C++ data plane + socket routing, Xcode extension signing/entitlement, реальная проверка VPN на устройстве.
+
+## 2026-11-15 — 8.3B2D2A: ExternalTun::Factory (разделённая тестовая сборка)
+- Базовый коммит: `feat/apple-core-integration@1f9024a`.
+- В отдельном экспериментальном режиме OpenVPN 3 Core выбирает `OPENVPN_EXTERNAL_TUN_FACTORY`, **без `OPENVPN_FORCE_TUN_NULL`**.
+- Native OpenVPNClient реализует factory callback и создаёт upstream `TunBuilderClient::ClientConfig` с корректными Frame, SessionStats и ссылкой на существующий TunBuilderBase.
+- `tun_builder_establish` по-прежнему возвращает -1; временный режим persistent TUN отклоняется; `start()` заблокирован дополнительным production guard.
+- `mycodex_external_tun_factory_compiled` — диагностический бит сборки, не состояние VPN. Синтетический test fixture только в отдельной macOS тестовой dylib.
+- Linux x86_64 Swift 6.2.1: SwiftPM XCTest 46/46 PASS; Release build PASS. macOS OpenVPN 3 нативную сборку пользователь должен проверить отдельно.
+- Не реализовано: рабочий socketpair/FD, Core data-plane, подтверждение Apple setTunnelNetworkSettings из Core callback, NetworkExtension end-to-end и реальное VPN соединение.
+- Следующий шаг: socketpair на границе OpenVPN FD / Apple NEPacketTunnelFlow, точная остановка потоков и квоты пакетов.
