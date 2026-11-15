@@ -181,3 +181,13 @@
 - macOS тесты и сборка NetworkExtension требуют отдельной проверки на Mac.
 - Не реализовано: реальный TunBuilderBase/NEPacketTunnelFlow, туннель, VPN CONNECTED.
 - Следующий шаг: capture pushed options из OpenVPN 3 Core и TUN packet bridge.
+
+## 2026-11-15 — этап 8.3B2A: двусторонняя staging-очередь пакетов
+- Основа: feat/apple-core-integration@60685cd.
+- Добавлен C++20 пакетный мост с C ABI create/push/pop/stats/close/destroy, отдельные очереди и пределы памяти по направлениям.
+- Переполнение возвращает явный backpressure и не удаляет уже принятые пакеты.
+- Swift MYCODEXPacketBridge, MYCODEXPacket, тесты IPv4/IPv6, порядка, переполнения и закрытия.
+- Linux Swift 6.2.1: swift test — 29/29 PASS; swift build -c release — PASS.
+- Требуется macOS native Core test и Windows DLL regression после внесения изменений.
+- НЕ реализовано: соединение с OpenVPN TunBuilderBase, NEPacketTunnelFlow, Apple entitlement, рабочий VPN.
+- Следующий этап: Apple TunBuilderBase + подтверждение setTunnelNetworkSettings и связывание реального пакетного транспорта.
