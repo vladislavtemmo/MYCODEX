@@ -210,3 +210,12 @@
 - Нативная компиляция с OpenVPN3 на macOS, тестовые callbacks и Apple SDK ещё НЕ подтверждены — выполнить `bash scripts/test-macos-tun-capture.sh`.
 - Не реализовано: OpenVPN encrypted packet path, NEPacketTunnelProvider, setTunnelNetworkSettings, реальное VPN-соединение, безопасная передача пакетов в Core.
 - Важно: существующая macOS Core-сборка с `OPENVPN_FORCE_TUN_NULL` не вызывает TunBuilder callbacks автоматически; отдельный тест вызывает их напрямую. Для production потребуется режим `USE_TUN_BUILDER` или `OPENVPN_EXTERNAL_TUN_FACTORY` с настоящим транспортом.
+
+## 2026-11-15 — этап 8.3B2D1: control plane Packet Tunnel Provider (fail closed)
+- Основа: `feat/apple-core-integration@4a298a4`.
+- Добавлены `MYCODEXPacketTunnelPreparation`, `MYCODEXAppleTunnelSettingsApplier`, 5 Swift-тестов, пример `NEPacketTunnelProvider`, документация и macOS regression script.
+- `settingsApplied` означает только успешный callback `setTunnelNetworkSettings`, не VPN `CONNECTED`. Запоздалый callback не оживляет остановленную сессию.
+- Пример Provider намеренно отвечает ошибкой на `startTunnel`, пока нет реального Apple ExternalTun/TUN data plane.
+- Проверено на Linux x86_64, Swift 6.2.1: 45/45 XCTest PASS; `swift build -c release` PASS. Apple-специфичный код прошёл типовую проверку с тестовой заглушкой NetworkExtension (не является проверкой Apple SDK).
+- macOS SDK/Xcode и реальные Apple-устройства требуют отдельных тестов. Windows regression и реальное VPN-подключение ещё не проверены.
+- Следующее: ExternalTun/C++ data plane + socket routing, Xcode extension signing/entitlement, реальная проверка VPN на устройстве.
