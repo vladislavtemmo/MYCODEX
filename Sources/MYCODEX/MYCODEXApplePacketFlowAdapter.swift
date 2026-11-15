@@ -17,6 +17,10 @@ public final class MYCODEXApplePacketFlowAdapter {
     private var active = false
     private var readInFlight = false
 
+    /// The owning transport driver can subscribe to *newly staged* packets.
+    /// Callbacks are MainActor-isolated. Do not pump from inside readPackets.
+    public var onIngressStaged: (@MainActor () -> Void)?
+
     public init(flow: NEPacketTunnelFlow,
                 bridge: MYCODEXPacketBridge,
                 onFailure: @escaping @MainActor (any Error) -> Void) {
@@ -38,7 +42,11 @@ public final class MYCODEXApplePacketFlowAdapter {
     public func ingressQueueDidDrain() {
         guard active else { return }
         do {
-            if try coordinator.resumeIncoming() { readNextIfPossible() }
+            let before = coordinator.hasPendingIngress
+            if try coordinator.resumeIncoming() {
+                if before { onIngressStaged?() }
+                readNextIfPossible()
+            } else if before { onIngressStaged?() }
         } catch { fail(error) }
     }
 
@@ -76,9 +84,9 @@ public final class MYCODEXApplePacketFlowAdapter {
                 do {
                     let batch = try MYCODEXPacketFlowCoordinator.classify(packets,
                                                             protocolFamilies: families)
-                    if try self.coordinator.stageIncoming(batch) {
-                        self.readNextIfPossible()
-                    }
+                    let canContinue = try self.coordinator.stageIncoming(batch)
+                    if !batch.isEmpty { self.onIngressStaged?() }
+                    if canContinue { self.readNextIfPossible() }
                 } catch { self.fail(error) }
             }
         }

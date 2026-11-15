@@ -258,3 +258,11 @@
 - Linux Swift 6.2.1: 58/58 `swift test` PASS, Release PASS; Apple API typecheck только с заглушкой.
 - macOS Xcode/OpenVPN Core/real NetworkExtension: требуется тестировать по `scripts/test-macos-tun-settings-ack.sh`.
 - Важный блокер: `mycodex_client_start()` всё ещё -6; настоящий provider, pump, worker/wakeup и VPN-сессия не реализованы. `setTunnelNetworkSettings` ACK не подтверждает VPN CONNECTED.
+
+## 2026-11-15 — этап 8.3B2D2D2: событийное пробуждение PacketFlow / socketpair
+- База: feat/apple-core-integration@5cee693; GitHub репозиторий переименован в `vladislavtemmo/OpenVPNAdapte-for-Apple`.
+- Новый POSIX C ABI monitor FD (дубликат pump-end, только readiness) + pending-to-Core status. Windows заглушки и DLL exports.
+- Новая Apple-only `MYCODEXApplePacketTransportDriver`: DispatchSourceRead/Write, только фактические события; ограниченный размер пачки и сохранение egress retry.
+- Адаптер `NEPacketTunnelFlow` отправляет уведомление о входных пакетах; при остановке GCD источники отменяются и FD освобождаются.
+- Результаты предварительно: Swift Linux XCTest 60/60 PASS, SwiftPM Release PASS. macOS Core + Xcode/NetworkExtension / подписанное расширение требуют проверки отдельно.
+- **Граница:** пример Provider продолжает fail-closed; настоящая VPN сессия, TLS, сервер и end-to-end трафик не проверены; `start()` возвращает -6.

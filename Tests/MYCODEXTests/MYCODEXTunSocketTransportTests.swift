@@ -47,6 +47,46 @@ final class MYCODEXTunSocketTransportTests: XCTestCase {
         XCTAssertEqual(try transport.pump(), MYCODEXTunSocketProgress(intoCore: 0, intoSystem: 0))
     }
 
+    func testReadinessDescriptorObservesPacketsWithoutConsumingThem() throws {
+        let queue = try MYCODEXPacketBridge(maxPackets: 2, maxBytes: 1024)
+        let transport = try MYCODEXTunSocketTransport(bridge: queue)
+        let coreFD = try transport.duplicateCoreFileDescriptor()
+        let monitorFD = try transport.duplicateMonitorFileDescriptor()
+        defer { _ = close(monitorFD); _ = close(coreFD) }
+        XCTAssertFalse(try transport.hasPendingCoreWrite())
+        var event = pollfd(fd: monitorFD, events: Int16(POLLIN), revents: 0)
+        XCTAssertEqual(poll(&event, 1, 0), 0)
+
+        let packet = try ipv4(0x44)
+        let sent = packet.data.withUnsafeBytes {
+            send(coreFD, $0.baseAddress, $0.count, Int32(MSG_DONTWAIT))
+        }
+        XCTAssertEqual(sent, packet.data.count)
+        XCTAssertEqual(poll(&event, 1, 100), 1)
+        XCTAssertNotEqual(event.revents & Int16(POLLIN), 0)
+        XCTAssertEqual(try transport.pump().intoSystem, 1)
+        XCTAssertEqual(try queue.dequeue(direction: .toSystem), packet)
+        XCTAssertEqual(poll(&event, 1, 0), 0)
+    }
+
+    func testMonitorDescriptorIsOwnedIndependently() throws {
+        let queue = try MYCODEXPacketBridge()
+        let transport = try MYCODEXTunSocketTransport(bridge: queue)
+        let monitorFD = try transport.duplicateMonitorFileDescriptor()
+        XCTAssertGreaterThanOrEqual(monitorFD, 0)
+        _ = close(monitorFD)
+        let coreFD = try transport.duplicateCoreFileDescriptor()
+        _ = close(coreFD)
+        XCTAssertFalse(try transport.hasPendingCoreWrite())
+        try transport.close()
+        XCTAssertThrowsError(try transport.duplicateMonitorFileDescriptor()) {
+            XCTAssertEqual($0 as? MYCODEXTunSocketError, .closed)
+        }
+        XCTAssertThrowsError(try transport.hasPendingCoreWrite()) {
+            XCTAssertEqual($0 as? MYCODEXTunSocketError, .closed)
+        }
+    }
+
     func testFullEgressQueueRetainsPendingDatagram() throws {
         let queue = try MYCODEXPacketBridge(maxPackets: 1, maxBytes: 1024)
         let transport = try MYCODEXTunSocketTransport(bridge: queue)

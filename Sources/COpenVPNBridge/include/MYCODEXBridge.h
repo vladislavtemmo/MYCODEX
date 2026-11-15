@@ -156,6 +156,17 @@ int32_t mycodex_client_tun_fd_test_fixture(mycodex_client_handle *handle);
 typedef struct mycodex_tun_socket_transport mycodex_tun_socket_transport;
 mycodex_tun_socket_transport *mycodex_tun_socket_create(mycodex_packet_bridge *bridge);
 int32_t mycodex_tun_socket_dup_core_fd(mycodex_tun_socket_transport *transport);
+/* Event driven packet pumping. dup_monitor_fd returns an independently owned
+ * duplicate of the PUMP side of the socketpair (NOT the Core side). It may
+ * be used exclusively for POLLIN/POLLOUT/DispatchSource readiness observation;
+ * never recv/send through it, because that races with transport.pump().
+ * Caller closes the monitor descriptor after cancelling its event source.
+ * core_write_pending: 1=unsent datagram held, 0=none, -3=closed.
+ * Both return -1=arguments, -2=unsupported Windows, -4=OS failure.
+ * No operation may overlap transport destroy.
+ */
+int32_t mycodex_tun_socket_dup_monitor_fd(mycodex_tun_socket_transport *transport);
+int32_t mycodex_tun_socket_core_write_pending(mycodex_tun_socket_transport *transport);
 int32_t mycodex_tun_socket_pump(mycodex_tun_socket_transport *transport,
     uint32_t max_per_direction, uint32_t *into_core, uint32_t *into_system);
 int32_t mycodex_tun_socket_close(mycodex_tun_socket_transport *transport);
