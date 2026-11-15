@@ -57,6 +57,34 @@ int32_t mycodex_client_pause(mycodex_client_handle *handle);
 int32_t mycodex_client_resume(mycodex_client_handle *handle);
 int32_t mycodex_client_reconnect(mycodex_client_handle *handle, int32_t seconds);
 int32_t mycodex_client_wait(mycodex_client_handle *handle);
+/* Bounded, standalone duplex IP packet queue. No VPN/TUN is established.
+ * Directions: 1=system->Core, 2=Core->system (queues are NOT connected
+ * to either endpoint until the later PacketTunnel/ExternalTun integration).
+ * Push: 1=stored, 0=full (caller must retain/retry), -1=arguments,
+ * -2=invalid IP header, -3=closed, -4=internal failure.
+ * Pop: 1=packet, 0=empty, -1=arguments, -3=closed+empty,
+ * -4=internal failure, -5=buffer too small (packet remains queued).
+ * Stats: 0=success. Close: 0=success (idempotent).
+ * A queued packet is always copied once; returned packet bytes are copied
+ * to the caller-provided buffer. Two queues have separate resource quotas.
+ * All API calls except destroy are thread-safe. No calls may overlap destroy.
+ * max_packets <= 1024, 1024 <= max_bytes <= 8 MiB PER DIRECTION.
+ */
+#define MYCODEX_PACKET_TO_CORE 1
+#define MYCODEX_PACKET_TO_SYSTEM 2
+#define MYCODEX_PACKET_MAX_LENGTH 65535
+
+typedef struct mycodex_packet_bridge mycodex_packet_bridge;
+mycodex_packet_bridge *mycodex_packet_bridge_create(uint32_t max_packets, size_t max_bytes);
+int32_t mycodex_packet_bridge_push(mycodex_packet_bridge *bridge,
+    int32_t direction, const uint8_t *data, size_t length, uint32_t family);
+int32_t mycodex_packet_bridge_pop(mycodex_packet_bridge *bridge,
+    int32_t direction, uint8_t *buffer, size_t capacity,
+    size_t *actual_length, uint32_t *family);
+int32_t mycodex_packet_bridge_stats(mycodex_packet_bridge *bridge,
+    int32_t direction, uint32_t *packets, size_t *bytes);
+int32_t mycodex_packet_bridge_close(mycodex_packet_bridge *bridge);
+void mycodex_packet_bridge_destroy(mycodex_packet_bridge *bridge);
 #ifdef __cplusplus
 }
 #endif
