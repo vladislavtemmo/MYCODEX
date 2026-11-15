@@ -46,9 +46,16 @@ return -2;
 #include <memory>
 #include <mutex>
 #include <thread>
+#include <utility>
 #include <openssl/crypto.h>
 #include "MYCODEXTunCapture.hpp"
 #include <atomic>
+// Only the external-factory build includes the FD-backed OpenVPN TunBuilder
+// implementation. Do not enable a live tunnel merely by selecting this path.
+#if defined(OPENVPN_EXTERNAL_TUN_FACTORY)
+#include <openvpn/tun/builder/client.hpp>
+#include <openvpn/tun/extern/config.hpp>
+#endif
 
 class MYCODEXNativeClient final : public openvpn::ClientAPI::OpenVPNClient {
 public:
@@ -75,6 +82,30 @@ public:
         r.error = true;
         r.errorText = "External PKI is not implemented";
     }
+
+#if defined(OPENVPN_EXTERNAL_TUN_FACTORY)
+    // OpenVPN 3 selects this factory in ClientOptions::ClientOptions when built
+    // with OPENVPN_EXTERNAL_TUN_FACTORY. Reuse upstream's FD-backed TunBuilder
+    // client, rather than the macOS utun owner or TunNull. Establish still
+    // returns -1 until the Apple PacketFlow transport/ACK path exists.
+    openvpn::TunClientFactory *new_tun_factory(
+        const openvpn::ExternalTun::Config &conf,
+        const openvpn::OptionList &) override {
+        // Core can ask for persistence across reconnect; reject until the
+        // socket/worker lifetime model is explicitly implemented and tested.
+        if (conf.tun_persist) return nullptr;
+        auto cfg = openvpn::TunBuilderClient::ClientConfig::new_obj();
+        cfg->tun_prop = conf.tun_prop;
+        cfg->frame = conf.frame;
+        cfg->stats = conf.stats;
+        cfg->builder = this;
+        cfg->retain_sd = false;
+        cfg->tun_prefix = false; // PacketFlow delivers raw IPv4/IPv6 packets.
+        cfg->n_parallel = 8;
+        external_tun_config_ = std::move(cfg);
+        return external_tun_config_.get();
+    }
+#endif
 
     // Capture actual TunBuilderBase callbacks. This does NOT provide a TUN FD.
     // The capture becomes readable only after establish() was called, which
@@ -182,6 +213,11 @@ public:
     }
 
 private:
+#if defined(OPENVPN_EXTERNAL_TUN_FACTORY)
+    // Keep a strong ref until Core acquires its own intrusive RCPtr. The
+    // builder holds a non-owning pointer back to this OpenVPNClient.
+    openvpn::TunBuilderClient::ClientConfig::Ptr external_tun_config_;
+#endif
     static bool valid_prefix(bool ipv6, int prefix) {
         return prefix >= 0 && prefix <= (ipv6 ? 128 : 32);
     }
@@ -371,7 +407,7 @@ extern "C" int32_t mycodex_client_start(mycodex_client_handle *handle) {
     try {
         std::lock_guard<std::mutex> lock(handle->lifecycle_mutex);
         if (!handle->configured || handle->run_started) return -4;
-#if defined(MYCODEX_HAS_APPLE_TUN_ADAPTER) && !defined(OPENVPN_FORCE_TUN_NULL)
+#if defined(MYCODEX_HAS_APPLE_TUN_ADAPTER) && defined(MYCODEX_PRODUCTION_TUN_TRANSPORT_VERIFIED) && defined(OPENVPN_EXTERNAL_TUN_FACTORY) && !defined(OPENVPN_FORCE_TUN_NULL)
         // Only an Apple TUN adapter that actively implements TunBuilderBase may
         // enable this flag. The adapter is not present in the current milestone.
         handle->run_state = 2;
@@ -493,7 +529,7 @@ extern "C" int32_t mycodex_client_wait(mycodex_client_handle *handle) {
 
 /* Diagnostic capability, not a claim of active connection. */
 extern "C" int32_t mycodex_client_tunnel_available(void) {
-#if defined(MYCODEX_WITH_OPENVPN3) && defined(MYCODEX_HAS_APPLE_TUN_ADAPTER) && !defined(OPENVPN_FORCE_TUN_NULL)
+#if defined(MYCODEX_WITH_OPENVPN3) && defined(MYCODEX_HAS_APPLE_TUN_ADAPTER) && defined(MYCODEX_PRODUCTION_TUN_TRANSPORT_VERIFIED) && defined(OPENVPN_EXTERNAL_TUN_FACTORY) && !defined(OPENVPN_FORCE_TUN_NULL)
     return 1;
 #else
     return 0;
@@ -573,5 +609,39 @@ extern "C" int32_t mycodex_client_tun_test_fixture(mycodex_client_handle *handle
         if (client.tun_builder_establish() != -1) return -3;
         return 0;
     } catch (...) { return -3; }
+}
+#endif
+
+/* Feature-probe, not proof of an established VPN/TUN. The Apple packet flow
+ * must still supply a real FD, settings acknowledgement and data-plane pump.
+ */
+extern "C" int32_t mycodex_external_tun_factory_compiled(void) {
+#if defined(MYCODEX_WITH_OPENVPN3) && defined(OPENVPN_EXTERNAL_TUN_FACTORY) && !defined(OPENVPN_FORCE_TUN_NULL)
+    return 1;
+#else
+    return 0;
+#endif
+}
+
+#if defined(MYCODEX_EXTERNAL_TUN_FACTORY_TESTING) && defined(MYCODEX_WITH_OPENVPN3) && defined(OPENVPN_EXTERNAL_TUN_FACTORY) && !defined(OPENVPN_FORCE_TUN_NULL)
+/* The only synthetic factory hook; excluded from all production builds.
+ * Core never connects and no real network device is created here.
+ */
+extern "C" int32_t mycodex_external_tun_factory_test_fixture(mycodex_client_handle *handle) {
+    if (!handle || !handle->client || !handle->configured) return -1;
+    try {
+        openvpn::ExternalTun::Config config;
+        config.tun_persist = false;
+        openvpn::OptionList empty;
+        config.tun_persist = true;
+        if (handle->client->new_tun_factory(config, empty) != nullptr) return -5;
+        config.tun_persist = false;
+        auto *factory = handle->client->new_tun_factory(config, empty);
+        if (!factory || !factory->supports_epoch_data() || factory->layer_2_supported()) return -2;
+        // No FD, no network settings, no CONNECTED. Even with the real factory
+        // selected, the entrypoint must remain blocked.
+        if (handle->client->tun_builder_establish() != -1) return -3;
+        return 0;
+    } catch (...) { return -4; }
 }
 #endif

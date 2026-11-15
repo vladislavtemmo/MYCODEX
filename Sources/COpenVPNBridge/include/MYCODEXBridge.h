@@ -105,6 +105,15 @@ void mycodex_tun_snapshot_destroy(mycodex_tun_snapshot *snapshot);
 /* Test-only direct callback fixture, compiled out of production binaries. */
 int32_t mycodex_client_tun_test_fixture(mycodex_client_handle *handle);
 #endif
+/* Diagnostic: 1 means the OpenVPN EXTERNAL_TUN_FACTORY build path was
+ * selected; 0 means fallback, TunNull or another native Core build.
+ * Does not assert actual VPN connectivity or Apple NetworkExtension readiness.
+ */
+int32_t mycodex_external_tun_factory_compiled(void);
+#if defined(MYCODEX_EXTERNAL_TUN_FACTORY_TESTING)
+/* Test-only fixture, must not be available in production builds. */
+int32_t mycodex_external_tun_factory_test_fixture(mycodex_client_handle *handle);
+#endif
 #ifdef __cplusplus
 }
 #endif
