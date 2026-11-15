@@ -59,6 +59,12 @@ public final class MYCODEXPacketBridge {
         self.maximumQueueBytes = maxBytes
     }
 
+    /// Scoped internal access. The owner must keep this bridge alive and never
+    /// destroy it concurrently with a native operation.
+    internal func withNativeHandle<R>(_ body: (OpaquePointer) -> R) -> R {
+        body(handle)
+    }
+
     deinit { mycodex_packet_bridge_destroy(handle) }
 
     @discardableResult
