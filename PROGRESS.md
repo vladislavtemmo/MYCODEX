@@ -138,3 +138,11 @@
 - macOS native bridge: libmycodex_core.dylib собрана; Swift integration PASS: SWIFT_CORE_LINKED=1, SWIFT_VALID=1, SWIFT_INVALID_REJECTED=1, SWIFT_TO_OPENVPN3_PASSED.
 - Ограничения: проверка выполнена отдельным исследовательским тестом; SwiftPM пока без реального Core; VPN-сессия и NetworkExtension не реализованы.
 - Следующий шаг: автоматизация macOS integration probe, подключение OpenVPNClient и тесты туннеля.
+
+## 2026-11-15 — macOS: автоматизация Swift/OpenVPN 3 Core integration
+- Добавлен scripts/test-macos-swift-core.sh.
+- Проверяется pinned SHA OpenVPN 3 Core, C ABI, OpenSSL, сборка native bridge и Swift integration.
+- Фактический результат: SWIFT_CORE_LINKED=1, SWIFT_VALID=1, SWIFT_INVALID_REJECTED=1, SWIFT_TO_OPENVPN3_PASSED.
+- Повторная сборка C++: ninja no work to do; Swift integration test PASS.
+- Ограничения: реальная VPN-сессия и NetworkExtension ещё не реализованы.
+- Следующий этап: OpenVPNClient и управление жизненным циклом соединения.
