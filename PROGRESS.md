@@ -266,3 +266,12 @@
 - Адаптер `NEPacketTunnelFlow` отправляет уведомление о входных пакетах; при остановке GCD источники отменяются и FD освобождаются.
 - Результаты предварительно: Swift Linux XCTest 60/60 PASS, SwiftPM Release PASS. macOS Core + Xcode/NetworkExtension / подписанное расширение требуют проверки отдельно.
 - **Граница:** пример Provider продолжает fail-closed; настоящая VPN сессия, TLS, сервер и end-to-end трафик не проверены; `start()` возвращает -6.
+
+## 2026-11-16 — этап 8.3B2D2D3: модель жизненного цикла Packet Tunnel Provider
+- Основа: `feat/apple-core-integration@a360530` (репозиторий `vladislavtemmo/OpenVPNAdapte-for-Apple`).
+- Добавлена `@MainActor`-машина состояний `MYCODEXPacketTunnelSessionLifecycle`: успешный start-completion допускается только после реального Core `CONNECTED`, предварительно прошедших сетевого settings ACK и запуска PacketFlow транспорта. Ранний CONNECTED, старые generation и ошибки отвергаются.
+- Двухфазная остановка: `stopping -> releasingResources -> stopped`; `stopTunnel` completion только после Core join и освобождения ресурсов. Повторный stop не создаёт новую операцию остановки.
+- Пример `PacketTunnelProvider` использует lifecycle и остаётся строго fail-closed: `OpenVPNClient.start()` по-прежнему не вызывается и возвращает -6 в текущем production варианте.
+- Локально: Swift 6.2.1 Linux отдельный SwiftPM стенд 9/9 XCTest PASS и Release PASS; проверка типов Apple-примера в Swift 6 со stub NetworkExtension PASS. Полный SwiftPM/macOS native regression и Xcode signing остаются для MacBook.
+- Изменены: `Examples/PacketTunnelProvider/PacketTunnelProvider.swift`, `PROGRESS.md`. Добавлены: `Sources/MYCODEX/MYCODEXPacketTunnelSessionLifecycle.swift`, `Tests/MYCODEXTests/MYCODEXPacketTunnelSessionLifecycleTests.swift`, `docs/APPLE_PACKET_TUNNEL_SESSION_LIFECYCLE.md`, `scripts/test-macos-provider-lifecycle.sh`.
+- Ограничение: нет действующей Apple VPN сессии, нет endpoint тестов, Core start заблокирован. Следом — реальная интеграция worker/ACK/PacketFlow в подписанный extension и тесты устройства.
