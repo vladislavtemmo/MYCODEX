@@ -129,3 +129,12 @@
 - Автоматизированная сборка mycodex_core.dll и Swift integration probe завершилась успешно.
 - Проверено: SWIFT_CORE_LINKED=1, SWIFT_VALID=1, SWIFT_INVALID_REJECTED=1, SWIFT_TO_OPENVPN3_PASSED.
 - Основная сборка SwiftPM пока использует мост без ядра; VPN-туннель не реализован.
+
+## 2026-11-15 — macOS Intel x86_64: проверка ядра и Swift Bridge
+- macOS 15.8.2, Xcode 26.3, Swift 6.2.4, AppleClang 17.
+- SwiftPM: 20/20 tests PASS; Release build PASS.
+- OpenVPN 3 Core: pinned revision 0c1ce172fe918b05463d71e682a0c2f2d8fe7899; CMake Release build PASS; CTest CoreTests 1/1 PASS.
+- OpenSSL 3.5.9 обнаружен через PKG_CONFIG_PATH.
+- macOS native bridge: libmycodex_core.dylib собрана; Swift integration PASS: SWIFT_CORE_LINKED=1, SWIFT_VALID=1, SWIFT_INVALID_REJECTED=1, SWIFT_TO_OPENVPN3_PASSED.
+- Ограничения: проверка выполнена отдельным исследовательским тестом; SwiftPM пока без реального Core; VPN-сессия и NetworkExtension не реализованы.
+- Следующий шаг: автоматизация macOS integration probe, подключение OpenVPNClient и тесты туннеля.
