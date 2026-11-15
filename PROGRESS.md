@@ -191,3 +191,12 @@
 - Требуется macOS native Core test и Windows DLL regression после внесения изменений.
 - НЕ реализовано: соединение с OpenVPN TunBuilderBase, NEPacketTunnelFlow, Apple entitlement, рабочий VPN.
 - Следующий этап: Apple TunBuilderBase + подтверждение setTunnelNetworkSettings и связывание реального пакетного транспорта.
+
+## 2026-11-15 — Apple 8.3B2B: адаптер PacketFlow и backpressure (без VPN)
+- Основа: feat/apple-core-integration@c04ead9.
+- Добавлены переносимый MYCODEXPacketFlowCoordinator и Apple-only MYCODEXApplePacketFlowAdapter для readPackets/writePackets.
+- При переполнении удерживается остаток входящей партии без следующего read; выходящая партия удерживается, если системная запись не принята.
+- Исправлено чрезмерное выделение памяти при dequeue: буфер 2048 байт с увеличением по длине из C ABI.
+- Linux Swift 6.2.1: swift test 35/35 PASS, swift build -c release PASS; Apple-часть прошла только static typecheck с заглушкой NEPacketTunnelFlow.
+- Требуется проверка macOS SwiftPM/NetworkExtension SDK и нативного Core, затем iOS entitlement/device тесты.
+- Не подключены: OpenVPN TunBuilderBase/ExternalTun, реальный NEPacketTunnelProvider и зашифрованный сетевой канал.
