@@ -46,6 +46,8 @@ public struct MYCODEXPacketQueueStats: Sendable, Equatable {
 /// `destroy` must never race with any operation; caller serializes lifetime.
 public final class MYCODEXPacketBridge {
     private let handle: OpaquePointer
+    /// Максимальный размер очереди в байтах на каждое направление.
+    public let maximumQueueBytes: Int
 
     public init(maxPackets: UInt32 = 64, maxBytes: Int = 1_048_576) throws {
         guard maxPackets > 0 && maxPackets <= 1024,
@@ -54,6 +56,7 @@ public final class MYCODEXPacketBridge {
             throw MYCODEXPacketBridgeError.invalidConfiguration
         }
         self.handle = handle
+        self.maximumQueueBytes = maxBytes
     }
 
     deinit { mycodex_packet_bridge_destroy(handle) }
@@ -79,13 +82,23 @@ public final class MYCODEXPacketBridge {
     /// Removes at most one packet, or returns nil if the queue is empty.
     /// The native read copies bytes to a caller-owned Data buffer once.
     public func dequeue(direction: MYCODEXPacketDirection) throws -> MYCODEXPacket? {
-        var data = Data(count: Int(MYCODEX_PACKET_MAX_LENGTH))
+        // Обычно размер IP-пакета близок к MTU. Не выделяем 64 KiB на каждый pop:
+        // при редких больших пакетах C ABI возвращает необходимый размер (-5).
+        var data = Data(count: 2048)
         var actualLength: Int = 0
         var family: UInt32 = 0
-        let code: Int32 = data.withUnsafeMutableBytes { raw in
-            mycodex_packet_bridge_pop(handle, direction.rawValue,
-                                     raw.bindMemory(to: UInt8.self).baseAddress,
-                                     raw.count, &actualLength, &family)
+        func pop(_ buffer: inout Data) -> Int32 {
+            buffer.withUnsafeMutableBytes { raw in
+                mycodex_packet_bridge_pop(handle, direction.rawValue,
+                                         raw.bindMemory(to: UInt8.self).baseAddress,
+                                         raw.count, &actualLength, &family)
+            }
+        }
+        var code = pop(&data)
+        if code == -5 && actualLength > data.count &&
+           actualLength <= Int(MYCODEX_PACKET_MAX_LENGTH) {
+            data = Data(count: actualLength)
+            code = pop(&data)
         }
         switch code {
         case 0: return nil
