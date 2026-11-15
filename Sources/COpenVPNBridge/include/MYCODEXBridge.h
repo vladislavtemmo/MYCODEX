@@ -115,6 +115,30 @@ int32_t mycodex_external_tun_factory_compiled(void);
 int32_t mycodex_external_tun_factory_test_fixture(mycodex_client_handle *handle);
 #endif
 
+/* Core TUN file-descriptor handoff. This is NOT an active VPN.
+ * attach_fd borrows/duplicates a nonblocking AF_UNIX SOCK_DGRAM endpoint;
+ * original remains caller-owned. Must attach before Core connect attempt.
+ * wait_pending returns 1=pending generation, 0=timeout; generation is
+ * valid only until cancellation, teardown or the next establish attempt.
+ * On pending, caller reads its TunBuilder snapshot, applies real Apple
+ * network settings, THEN acknowledges 1=applied or 0=rejected.
+ * Acknowledgement must be made on a different thread from Core establish.
+ * On rejection, cancellation or timeout the Core FD is never released.
+ * Concurrent client destruction is forbidden; cancel before joining worker.
+ * All APIs return -1=bad args, -2=unsupported (fallback/no Core),
+ * -3=OS failure/cancelled, -4=invalid state/stale generation.
+ */
+int32_t mycodex_client_tun_attach_fd(mycodex_client_handle *handle, int32_t fd);
+int32_t mycodex_client_tun_wait_pending(mycodex_client_handle *handle,
+                                        uint32_t timeout_ms, uint64_t *generation);
+int32_t mycodex_client_tun_ack_settings(mycodex_client_handle *handle,
+                                         uint64_t generation, int32_t applied);
+int32_t mycodex_client_tun_cancel(mycodex_client_handle *handle);
+#if defined(MYCODEX_TUN_FD_TESTING)
+/* Test-only synthetic callback fixture. Never compiled in production. */
+int32_t mycodex_client_tun_fd_test_fixture(mycodex_client_handle *handle);
+#endif
+
 /* POSIX AF_UNIX/SOCK_DGRAM packet transport. This is NOT an active TUN.
  * The transport borrows the packet bridge; it MUST be destroyed before bridge.
  * The returned core FD is a duplicate owned/closed by its caller. Core/transport
