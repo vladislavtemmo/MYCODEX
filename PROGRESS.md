@@ -171,3 +171,13 @@
 - Linux Swift 6.2.1: swift test — 21/21 PASS, swift build -c release — PASS.
 - macOS и Windows необходимо проверить отдельно.
 - Не проверено: реальная VPN-сессия, сетевые гонки, Apple NetworkExtension, Windows.
+
+## 2026-11-15 — Apple 8.3B1: сетевые настройки Packet Tunnel (только подготовка)
+- База: feat/apple-core-integration, 2508fb3.
+- Добавлена валидация IPv4/IPv6 адресов, маршрутов, DNS и MTU.
+- Для Apple доступно создание NEPacketTunnelNetworkSettings на основе строго проверенной модели.
+- Добавлена классификация IPv4/IPv6 пакетов без копирования payload.
+- Добавлены XCTest-тесты; Linux Swift 6.2.1: 25/25 PASS и Release PASS (до проверки Mac).
+- macOS тесты и сборка NetworkExtension требуют отдельной проверки на Mac.
+- Не реализовано: реальный TunBuilderBase/NEPacketTunnelFlow, туннель, VPN CONNECTED.
+- Следующий шаг: capture pushed options из OpenVPN 3 Core и TUN packet bridge.
