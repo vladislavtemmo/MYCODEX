@@ -161,3 +161,13 @@
   **реальные события, соединение, TLS, NetworkExtension не проверены**.
 - Перед публикацией выполнить `swift test`, `swift build -c release`,
   `bash scripts/test-macos-swift-client.sh` на Mac Intel, затем Windows regression.
+
+## 2026-11-15 — этап 8.3A: lifecycle API, до реализации Apple TUN
+- Ветка: feat/apple-core-integration; база: 60f229e.
+- Подготовлены C++ worker, функции start/stop/pause/resume/reconnect/wait,
+  ограниченный Swift API и тестирование отказа запуска без TUN.
+- `start()` возвращает `tunnelUnavailable` до реальной интеграции NetworkExtension.
+- `runState.running` не является подтверждением VPN CONNECTED.
+- Linux Swift 6.2.1: swift test — 21/21 PASS, swift build -c release — PASS.
+- macOS и Windows необходимо проверить отдельно.
+- Не проверено: реальная VPN-сессия, сетевые гонки, Apple NetworkExtension, Windows.

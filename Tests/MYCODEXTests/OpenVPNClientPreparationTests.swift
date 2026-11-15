@@ -2,6 +2,13 @@ import XCTest
 @testable import MYCODEX
 
 final class OpenVPNClientPreparationTests: XCTestCase {
+    func testNativeRunStateDoesNotImplyVPNConnectivity() {
+        XCTAssertEqual(OpenVPNClientRunState.configured.rawValue, 1)
+        XCTAssertEqual(OpenVPNClientRunState.running.rawValue, 3)
+        XCTAssertEqual(OpenVPNClientRunState.failed.rawValue, 6)
+        XCTAssertFalse(OpenVPNClient.isTunnelAdapterAvailable)
+    }
+
     func testNativeErrorSurfaceIsExplicit() {
         XCTAssertNotEqual(OpenVPNClientError.invalidState, .credentialsRejected)
         let e = OpenVPNClientEvent(name: "CONNECTED", isError: false, isFatal: false)

@@ -45,6 +45,7 @@ return -2;
 #include <deque>
 #include <memory>
 #include <mutex>
+#include <thread>
 #include <openssl/crypto.h>
 
 class MYCODEXNativeClient final : public openvpn::ClientAPI::OpenVPNClient {
@@ -99,6 +100,12 @@ struct mycodex_client_handle {
 #if defined(MYCODEX_WITH_OPENVPN3)
     std::unique_ptr<MYCODEXNativeClient> client;
     bool configured = false;
+    // The worker owns no Swift objects. External C ABI calls must be serialized.
+    std::mutex lifecycle_mutex;
+    std::thread worker;
+    int32_t run_state = 0; // 0=new, 1=configured, 2=starting, 3=running,
+                           // 4=stopping, 5=stopped, 6=failed
+    bool run_started = false; // one connect attempt per client handle
 #endif
 };
 
@@ -127,6 +134,10 @@ extern "C" int32_t mycodex_client_configure(mycodex_client_handle *handle, const
         const auto result = handle->client->eval_config(config);
         if (result.error) return 1;
         handle->configured = true;
+        {
+            std::lock_guard<std::mutex> lock(handle->lifecycle_mutex);
+            handle->run_state = 1;
+        }
         return 0;
     } catch (...) {
         return -3;
@@ -136,7 +147,26 @@ extern "C" int32_t mycodex_client_configure(mycodex_client_handle *handle, const
 #endif
 }
 
+/* Stops and joins the worker before releasing its Core client. This may block.
+ * Never call destroy concurrently with another ABI operation on the same handle.
+ */
 extern "C" void mycodex_client_destroy(mycodex_client_handle *handle) {
+    if (handle == nullptr) return;
+#if defined(MYCODEX_WITH_OPENVPN3)
+    try {
+        bool active;
+        {
+            std::lock_guard<std::mutex> lock(handle->lifecycle_mutex);
+            active = handle->run_state == 2 || handle->run_state == 3 || handle->run_state == 4;
+            if (active) handle->run_state = 4;
+        }
+        if (active) handle->client->stop();
+        if (handle->worker.joinable()) handle->worker.join();
+    } catch (...) {
+        // C ABI must not propagate exceptions; std::thread::join normally cannot
+        // throw from an external (non-worker) thread. Caller must serialize calls.
+    }
+#endif
     delete handle;
 }
 
@@ -188,5 +218,157 @@ extern "C" int32_t mycodex_client_poll_event(mycodex_client_handle *handle,
     }
 #else
     return -2;
+#endif
+}
+
+/* Lifecycle API is intentionally disabled until a real PacketTunnel adapter is
+ * linked. OPENVPN_FORCE_TUN_NULL is an integration probe, NOT a VPN interface.
+ * This guards against reporting an unauthenticated/null-tunnel test as a VPN.
+ * If a genuine adapter is supplied later, all state transitions remain in Core.
+ */
+extern "C" int32_t mycodex_client_run_state(mycodex_client_handle *handle) {
+    if (!handle) return -1;
+#if defined(MYCODEX_WITH_OPENVPN3)
+    try {
+        std::lock_guard<std::mutex> lock(handle->lifecycle_mutex);
+        return handle->run_state;
+    } catch (...) { return -3; }
+#else
+    return -2;
+#endif
+}
+
+extern "C" int32_t mycodex_client_start(mycodex_client_handle *handle) {
+    if (!handle) return -1;
+#if defined(MYCODEX_WITH_OPENVPN3)
+    try {
+        std::lock_guard<std::mutex> lock(handle->lifecycle_mutex);
+        if (!handle->configured || handle->run_started) return -4;
+#if defined(MYCODEX_HAS_APPLE_TUN_ADAPTER) && !defined(OPENVPN_FORCE_TUN_NULL)
+        // Only an Apple TUN adapter that actively implements TunBuilderBase may
+        // enable this flag. The adapter is not present in the current milestone.
+        handle->run_state = 2;
+        handle->run_started = true;
+        try {
+            handle->worker = std::thread([handle]() {
+                {
+                    std::lock_guard<std::mutex> lk(handle->lifecycle_mutex);
+                    if (handle->run_state == 4) {
+                        handle->run_state = 5;
+                        return;
+                    }
+                    handle->run_state = 3;
+                }
+                try {
+                    const auto status = handle->client->connect();
+                    std::lock_guard<std::mutex> lk(handle->lifecycle_mutex);
+                    handle->run_state = status.error ? 6 : 5;
+                } catch (...) {
+                    std::lock_guard<std::mutex> lk(handle->lifecycle_mutex);
+                    handle->run_state = 6;
+                }
+            });
+        } catch (...) {
+            handle->run_started = false;
+            handle->run_state = 1;
+            return -3;
+        }
+        return 0;
+#else
+        return -6; // tunnel adapter not installed: NEVER start a null-tun VPN
+#endif
+    } catch (...) { return -3; }
+#else
+    return -2;
+#endif
+}
+
+extern "C" int32_t mycodex_client_request_stop(mycodex_client_handle *handle) {
+    if (!handle) return -1;
+#if defined(MYCODEX_WITH_OPENVPN3)
+    try {
+        bool active;
+        {
+            std::lock_guard<std::mutex> lock(handle->lifecycle_mutex);
+            active = handle->run_state == 2 || handle->run_state == 3;
+            if (active) handle->run_state = 4;
+        }
+        if (active) handle->client->stop();
+        return 0; // idempotent, including before start and after stop
+    } catch (...) { return -3; }
+#else
+    return -2;
+#endif
+}
+
+extern "C" int32_t mycodex_client_pause(mycodex_client_handle *handle) {
+    if (!handle) return -1;
+#if defined(MYCODEX_WITH_OPENVPN3)
+    try {
+        {
+            std::lock_guard<std::mutex> lock(handle->lifecycle_mutex);
+            if (handle->run_state != 3) return -4;
+        }
+        handle->client->pause("network unavailable");
+        return 0;
+    } catch (...) { return -3; }
+#else
+    return -2;
+#endif
+}
+
+extern "C" int32_t mycodex_client_resume(mycodex_client_handle *handle) {
+    if (!handle) return -1;
+#if defined(MYCODEX_WITH_OPENVPN3)
+    try {
+        {
+            std::lock_guard<std::mutex> lock(handle->lifecycle_mutex);
+            if (handle->run_state != 3) return -4;
+        }
+        handle->client->resume();
+        return 0;
+    } catch (...) { return -3; }
+#else
+    return -2;
+#endif
+}
+
+extern "C" int32_t mycodex_client_reconnect(mycodex_client_handle *handle, int32_t seconds) {
+    if (!handle || seconds < 0 || seconds > 3600) return -1;
+#if defined(MYCODEX_WITH_OPENVPN3)
+    try {
+        {
+            std::lock_guard<std::mutex> lock(handle->lifecycle_mutex);
+            if (handle->run_state != 3) return -4;
+        }
+        handle->client->reconnect(seconds);
+        return 0;
+    } catch (...) { return -3; }
+#else
+    return -2;
+#endif
+}
+
+/* Blocking join, never call on the Swift main actor or from worker callbacks.
+ * The caller owns the handle and must serialize wait/destroy and other calls.
+ */
+extern "C" int32_t mycodex_client_wait(mycodex_client_handle *handle) {
+    if (!handle) return -1;
+#if defined(MYCODEX_WITH_OPENVPN3)
+    try {
+        if (handle->worker.joinable()) handle->worker.join();
+        return 0;
+    } catch (...) { return -3; }
+#else
+    return -2;
+#endif
+}
+
+/* Diagnostic capability, not a claim of active connection. */
+extern "C" int32_t mycodex_client_tunnel_available(void) {
+#if defined(MYCODEX_WITH_OPENVPN3) && defined(MYCODEX_HAS_APPLE_TUN_ADAPTER) && !defined(OPENVPN_FORCE_TUN_NULL)
+    return 1;
+#else
+    return 0;
 #endif
 }

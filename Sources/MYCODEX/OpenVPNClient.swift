@@ -8,6 +8,7 @@ public enum OpenVPNClientError: Error, Equatable, Sendable {
     case nativeError
     case invalidState
     case credentialsRejected
+    case tunnelUnavailable
     case unexpectedStatus(Int32)
 }
 
@@ -16,6 +17,17 @@ public struct OpenVPNClientEvent: Equatable, Sendable {
     public let name: String
     public let isError: Bool
     public let isFatal: Bool
+}
+
+/// Состояние рабочего потока Core, не состояние VPN-туннеля.
+public enum OpenVPNClientRunState: Int32, Sendable, Equatable {
+    case initial = 0
+    case configured = 1
+    case starting = 2
+    case running = 3
+    case stopping = 4
+    case stopped = 5
+    case failed = 6
 }
 
 /// Владеет C++ OpenVPNClient через opaque C ABI handle.
@@ -80,6 +92,62 @@ public final class OpenVPNClient {
         case -2: throw OpenVPNClientError.coreUnavailable
         case -3: throw OpenVPNClientError.nativeError
         default: throw OpenVPNClientError.unexpectedStatus(status)
+        }
+    }
+
+    /// Реальный Tunnel Adapter ещё не реализован, поэтому start пока
+    /// обязательно возвращает tunnelUnavailable. Это безопаснее, чем
+    /// выдавать null-TUN тест за настоящее VPN-подключение.
+    public static var isTunnelAdapterAvailable: Bool {
+        mycodex_client_tunnel_available() == 1
+    }
+
+    public var runState: OpenVPNClientRunState {
+        get throws {
+            let value = mycodex_client_run_state(handle)
+            if let state = OpenVPNClientRunState(rawValue: value) { return state }
+            throw Self.lifecycleError(value)
+        }
+    }
+
+    public func start() throws {
+        try Self.checkLifecycle(mycodex_client_start(handle))
+    }
+
+    /// Асинхронно запрашивает остановку Core. Не блокирует ожидая завершения.
+    public func requestStop() throws {
+        try Self.checkLifecycle(mycodex_client_request_stop(handle))
+    }
+
+    public func pause() throws {
+        try Self.checkLifecycle(mycodex_client_pause(handle))
+    }
+
+    public func resume() throws {
+        try Self.checkLifecycle(mycodex_client_resume(handle))
+    }
+
+    public func reconnect(afterSeconds seconds: Int32) throws {
+        try Self.checkLifecycle(mycodex_client_reconnect(handle, seconds))
+    }
+
+    /// Блокирует текущий поток до завершения worker. Не вызывайте на MainActor.
+    public func waitForWorker() throws {
+        try Self.checkLifecycle(mycodex_client_wait(handle))
+    }
+
+    private static func checkLifecycle(_ status: Int32) throws {
+        if status != 0 { throw lifecycleError(status) }
+    }
+
+    private static func lifecycleError(_ status: Int32) -> OpenVPNClientError {
+        switch status {
+        case -1: return .invalidArgument
+        case -2: return .coreUnavailable
+        case -3: return .nativeError
+        case -4: return .invalidState
+        case -6: return .tunnelUnavailable
+        default: return .unexpectedStatus(status)
         }
     }
 
