@@ -200,3 +200,13 @@
 - Linux Swift 6.2.1: swift test 35/35 PASS, swift build -c release PASS; Apple-часть прошла только static typecheck с заглушкой NEPacketTunnelFlow.
 - Требуется проверка macOS SwiftPM/NetworkExtension SDK и нативного Core, затем iOS entitlement/device тесты.
 - Не подключены: OpenVPN TunBuilderBase/ExternalTun, реальный NEPacketTunnelProvider и зашифрованный сетевой канал.
+
+## 2026-11-15 — этап 8.3B2C: захват настроек OpenVPN TunBuilderBase
+- База: feat/apple-core-integration@1eebcda.
+- Подготовлены callbacks TunBuilderBase в реальном OpenVPNClient, которые фиксируют remote, IPv4/IPv6, маршруты, DNS и MTU в C++.
+- Снимок передаётся через C ABI и преобразуется в валидируемую Swift-модель сетевых настроек; `tun_builder_establish()` по-прежнему возвращает -1, а `start()` заблокирован без реального TUN.
+- Добавлены переносимые XCTest и отдельный macOS test-only Core callback probe.
+- В контейнере Linux Swift 6.2.1: `swift test` — 40/40 PASS; `swift build -c release` — PASS.
+- Нативная компиляция с OpenVPN3 на macOS, тестовые callbacks и Apple SDK ещё НЕ подтверждены — выполнить `bash scripts/test-macos-tun-capture.sh`.
+- Не реализовано: OpenVPN encrypted packet path, NEPacketTunnelProvider, setTunnelNetworkSettings, реальное VPN-соединение, безопасная передача пакетов в Core.
+- Важно: существующая macOS Core-сборка с `OPENVPN_FORCE_TUN_NULL` не вызывает TunBuilder callbacks автоматически; отдельный тест вызывает их напрямую. Для production потребуется режим `USE_TUN_BUILDER` или `OPENVPN_EXTERNAL_TUN_FACTORY` с настоящим транспортом.
