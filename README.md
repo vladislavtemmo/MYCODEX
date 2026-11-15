@@ -1,4 +1,4 @@
-# MYCODEX — современная OpenVPN-библиотека для Apple
+# OpenVPNAdapte-for-Apple — современная OpenVPN-библиотека для Apple
 
 **Статус: этап 1 — Swift Package и проверяемый C++-мост. VPN-движок ещё не подключён.**
 
