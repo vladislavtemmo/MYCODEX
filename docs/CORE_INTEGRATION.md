@@ -61,3 +61,20 @@ Upstream использует C++20. Старый OpenVPNAdapter включал 
   После внедрения worker-thread lifecycle эта модель должна быть пересмотрена.
 - Тесты в этой версии проверяют передачу credentials в Core и пустую очередь;
   фактические события будут тестироваться только с реальным соединением.
+
+## 2026-11-15 — Apple 8.3A: lifecycle bridge до реализации Tunnel Adapter
+
+- В C ABI добавлены `start`, `request_stop`, `pause`, `resume`, `reconnect`,
+  `wait`, `run_state` и `tunnel_available`; Swift предоставляет соответствующие методы.
+- `start()` **отклоняется с кодом -6** без реального `TunBuilderBase` +
+  `NEPacketTunnelFlow`: интеграционная сборка с `OPENVPN_FORCE_TUN_NULL`
+  никогда не считается готовым VPN-туннелем.
+- Подготовлен worker C++ `std::thread` для будущего настоящего TUN адаптера;
+  вызов `connect()` не должен выполняться на главном потоке.
+- `requestStop` идемпотентен, `waitForWorker` и `destroy` могут блокировать.
+  `OpenVPNClient` намеренно не является `Sendable`; вызовы должны быть
+  сериализованы, включая освобождение памяти.
+- Статус *runState.running* означает лишь активный поток, **не** событие
+  *CONNECTED*. Сетевые соединения и события CONNECTED ещё не тестировались.
+- Предстоит: настоящий TUN адаптер и проверка race-сценариев
+  stop-before-connect, error-return и teardown на реальном устройстве.

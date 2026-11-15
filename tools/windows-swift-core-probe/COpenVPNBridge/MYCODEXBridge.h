@@ -40,6 +40,23 @@ int32_t mycodex_client_provide_credentials(mycodex_client_handle *handle,
 #define MYCODEX_CLIENT_EVENT_NAME_CAPACITY 128
 int32_t mycodex_client_poll_event(mycodex_client_handle *handle,
     char *name, size_t capacity, int32_t *flags);
+
+/* Lifecycle: run state describes the Core worker, NOT VPN connectivity.
+ * 0=new, 1=configured, 2=starting, 3=worker running, 4=stopping,
+ * 5=stopped, 6=failed. A CONNECTED Core event is required to claim VPN.
+ * Start returns -6 while the real PacketTunnel/TunBuilder adapter is absent.
+ * Other error codes: -1 arguments, -2 Core unavailable, -3 exception,
+ * -4 invalid state. stop is idempotent and nonblocking; wait and destroy
+ * can block. Serialize all external operations and destruction on a handle.
+ */
+int32_t mycodex_client_tunnel_available(void);
+int32_t mycodex_client_run_state(mycodex_client_handle *handle);
+int32_t mycodex_client_start(mycodex_client_handle *handle);
+int32_t mycodex_client_request_stop(mycodex_client_handle *handle);
+int32_t mycodex_client_pause(mycodex_client_handle *handle);
+int32_t mycodex_client_resume(mycodex_client_handle *handle);
+int32_t mycodex_client_reconnect(mycodex_client_handle *handle, int32_t seconds);
+int32_t mycodex_client_wait(mycodex_client_handle *handle);
 #ifdef __cplusplus
 }
 #endif

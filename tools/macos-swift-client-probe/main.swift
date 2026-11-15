@@ -10,6 +10,28 @@ guard try client.pollEvent() == nil else { fatalError("Unexpected events before 
 print("SWIFT_EVENT_QUEUE_EMPTY=1")
 try client.provideCredentials(username: "probe-user", password: "probe-nonsecret")
 print("SWIFT_CREDENTIALS_PROVIDED=1")
+guard try client.runState == .configured else { fatalError("Unexpected run state") }
+print("SWIFT_RUN_STATE_CONFIGURED=1")
+guard !OpenVPNClient.isTunnelAdapterAvailable else { fatalError("Unexpected native tunnel availability") }
+print("SWIFT_TUNNEL_UNAVAILABLE=1")
+do {
+    try client.start()
+    fatalError("Core start was allowed without a real TUN adapter")
+} catch OpenVPNClientError.tunnelUnavailable {
+    print("SWIFT_START_SAFELY_REJECTED=1")
+}
+guard try client.runState == .configured else { fatalError("State changed despite rejected start") }
+do {
+    try client.pause()
+    fatalError("Pause accepted before start")
+} catch OpenVPNClientError.invalidState {
+    print("SWIFT_PAUSE_BEFORE_START_REJECTED=1")
+}
+try client.requestStop()
+try client.requestStop()
+try client.waitForWorker()
+print("SWIFT_STOP_IDEMPOTENT=1")
+
 do {
     try client.configure(validProfile)
     fatalError("Second configuration unexpectedly accepted")
