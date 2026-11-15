@@ -156,6 +156,32 @@ extern "C" int32_t mycodex_tun_socket_dup_core_fd(mycodex_tun_socket_transport *
     } catch (...) { return -4; }
 }
 
+// An independently owned monitor-only duplicate of the pump endpoint.
+// Never read/write through this descriptor: it is exclusively for kqueue/
+// DispatchSource readiness notifications. The caller must close it.
+extern "C" int32_t mycodex_tun_socket_dup_monitor_fd(mycodex_tun_socket_transport *transport) {
+    if (!transport) return -1;
+    try {
+        std::lock_guard<std::mutex> lock(transport->mutex);
+        if (transport->closed || transport->pump_fd < 0) return -3;
+        const int fd = ::dup(transport->pump_fd);
+        if (fd < 0) return -4;
+        if (!cloexec(fd)) { (void)::close(fd); return -4; }
+        return fd;
+    } catch (...) { return -4; }
+}
+
+// 1: a datagram is waiting for a writable pump FD. 0: none waiting.
+// Does not inspect the separate staging queue; callers inspect both.
+extern "C" int32_t mycodex_tun_socket_core_write_pending(mycodex_tun_socket_transport *transport) {
+    if (!transport) return -1;
+    try {
+        std::lock_guard<std::mutex> lock(transport->mutex);
+        if (transport->closed) return -3;
+        return transport->pending_to_core.empty() ? 0 : 1;
+    } catch (...) { return -4; }
+}
+
 extern "C" int32_t mycodex_tun_socket_pump(mycodex_tun_socket_transport *transport,
     uint32_t max_per_direction, uint32_t *into_core, uint32_t *into_system) {
     if (!transport || !into_core || !into_system || max_per_direction == 0 || max_per_direction > 256)
@@ -197,6 +223,8 @@ extern "C" void mycodex_tun_socket_destroy(mycodex_tun_socket_transport *transpo
 struct mycodex_tun_socket_transport {};
 extern "C" mycodex_tun_socket_transport *mycodex_tun_socket_create(mycodex_packet_bridge *) { return nullptr; }
 extern "C" int32_t mycodex_tun_socket_dup_core_fd(mycodex_tun_socket_transport *) { return -2; }
+extern "C" int32_t mycodex_tun_socket_dup_monitor_fd(mycodex_tun_socket_transport *) { return -2; }
+extern "C" int32_t mycodex_tun_socket_core_write_pending(mycodex_tun_socket_transport *) { return -2; }
 extern "C" int32_t mycodex_tun_socket_pump(mycodex_tun_socket_transport *, uint32_t,
     uint32_t *, uint32_t *) { return -2; }
 extern "C" int32_t mycodex_tun_socket_close(mycodex_tun_socket_transport *) { return -2; }

@@ -57,6 +57,26 @@ public final class MYCODEXTunSocketTransport {
         throw Self.error(result)
     }
 
+    /// Returns a caller-owned POSIX FD for observing the native pump socket.
+    /// Only use with readiness monitors. NEVER recv/send on this duplicate:
+    /// those operations must be performed exclusively by pump().
+    public func duplicateMonitorFileDescriptor() throws -> Int32 {
+        let result = mycodex_tun_socket_dup_monitor_fd(handle)
+        if result >= 0 { return result }
+        if result == -2 { throw MYCODEXTunSocketError.unsupported }
+        throw Self.error(result)
+    }
+
+    /// True when the native pump retains a datagram that could not be sent.
+    /// This is distinct from the toCore staging queue statistics.
+    public func hasPendingCoreWrite() throws -> Bool {
+        let result = mycodex_tun_socket_core_write_pending(handle)
+        if result == 1 { return true }
+        if result == 0 { return false }
+        if result == -2 { throw MYCODEXTunSocketError.unsupported }
+        throw Self.error(result)
+    }
+
     /// Moves at most `maxPerDirection` packets from Core->system and
     /// system->Core. No busy-waiting; no implicit background loop.
     /// A full queue retains its pending datagram until a later pump().
