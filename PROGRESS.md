@@ -249,3 +249,12 @@
 - Linux C++ standalone: 4 сценария PASS (approve/reject/cancel/timeout). Минимальная SwiftPM regression: 6/6 PASS, Release PASS. Полная SwiftPM матрица и нативная macOS с pinned OpenVPN 3 Core — требуют проверки пользователем.
 - Запуск VPN по-прежнему заблокирован (`tunnel_available=0`, `start=-6`); реальный `NEPacketTunnelProvider` и pump Core↔Apple не интегрированы.
 - Следующий шаг: действительный NetworkExtension settings ACK, работающий packet pump без активного polling и device end-to-end тест.
+
+## 2026-11-15 — этап 8.3B2D2D1: Apple settings ACK → native TunBuilder FD handoff
+- GitHub-база: feat/apple-core-integration@4bcbca3. Это архив для применения локально; публикация не подтверждена.
+- Swift `MYCODEXTunFDAcknowledgement`: адаптер к уже опубликованному native C ABI attach/wait/ack/cancel. Временный Unix FD закрывается после передачи; ожидание отказывается блокировать MainThread.
+- `MYCODEXTunFDSettingsCoordinator`: MainActor поколение/отмена/однократный положительный/отрицательный ACK только после результата применения Apple settings. При отсутствии capture или ошибке ACK — fail-closed.
+- `MYCODEXAppleTunFDSettingsHandoff`: связывает `MYCODEXAppleTunnelSettingsApplier` с native ACK; **ещё не вызывается из рабочего Provider**.
+- Linux Swift 6.2.1: 58/58 `swift test` PASS, Release PASS; Apple API typecheck только с заглушкой.
+- macOS Xcode/OpenVPN Core/real NetworkExtension: требуется тестировать по `scripts/test-macos-tun-settings-ack.sh`.
+- Важный блокер: `mycodex_client_start()` всё ещё -6; настоящий provider, pump, worker/wakeup и VPN-сессия не реализованы. `setTunnelNetworkSettings` ACK не подтверждает VPN CONNECTED.
