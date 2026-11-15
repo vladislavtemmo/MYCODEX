@@ -50,6 +50,9 @@ return -2;
 #include <openssl/crypto.h>
 #include "MYCODEXTunCapture.hpp"
 #include <atomic>
+#if defined(OPENVPN_EXTERNAL_TUN_FACTORY) && !defined(_WIN32) && !defined(OPENVPN_FORCE_TUN_NULL)
+#include "MYCODEXTunFDHandoff.hpp"
+#endif
 // Only the external-factory build includes the FD-backed OpenVPN TunBuilder
 // implementation. Do not enable a live tunnel merely by selecting this path.
 #if defined(OPENVPN_EXTERNAL_TUN_FACTORY)
@@ -194,15 +197,59 @@ public:
     bool tun_builder_set_allow_local_dns(bool allow) override { return allow; }
 
     int tun_builder_establish() override {
-        std::lock_guard<std::mutex> lock(tun_mutex_);
-        tun_ready_ = tun_collecting_ && !tun_records_.empty();
-        return -1; // No actual TUN descriptor: connection always fails closed.
+        {
+            std::lock_guard<std::mutex> lock(tun_mutex_);
+            tun_ready_ = tun_collecting_ && !tun_records_.empty();
+            if (!tun_ready_) return -1;
+        }
+#if defined(OPENVPN_EXTERNAL_TUN_FACTORY) && !defined(_WIN32) && !defined(OPENVPN_FORCE_TUN_NULL)
+        // Blocks the Core worker until the signed Provider confirms the
+        // operating system accepted the captured network settings. No FD
+        // is released on timeout, explicit rejection or cancellation.
+        return tun_fd_handoff_.establish(15000);
+#else
+        return -1;
+#endif
     }
     bool tun_builder_persist() override { return false; }
     void tun_builder_teardown(bool) override {
+        cancel_tun_handoff();
         std::lock_guard<std::mutex> lock(tun_mutex_);
         tun_collecting_ = false;
         tun_ready_ = false;
+    }
+
+    // These controls are intentionally independent of the lifecycle mutex:
+    // tun_builder_establish() waits on the worker while the Provider ACKs
+    // from another thread. Handle destruction still requires serialization.
+    int32_t attach_tun_fd(int fd) {
+#if defined(OPENVPN_EXTERNAL_TUN_FACTORY) && !defined(_WIN32) && !defined(OPENVPN_FORCE_TUN_NULL)
+        return tun_fd_handoff_.stage(fd);
+#else
+        (void)fd;
+        return -2;
+#endif
+    }
+    int32_t wait_tun_pending(uint32_t milliseconds, uint64_t &generation) {
+#if defined(OPENVPN_EXTERNAL_TUN_FACTORY) && !defined(_WIN32) && !defined(OPENVPN_FORCE_TUN_NULL)
+        return tun_fd_handoff_.wait_pending(milliseconds, generation);
+#else
+        (void)milliseconds; (void)generation;
+        return -2;
+#endif
+    }
+    int32_t ack_tun_settings(uint64_t generation, bool applied) {
+#if defined(OPENVPN_EXTERNAL_TUN_FACTORY) && !defined(_WIN32) && !defined(OPENVPN_FORCE_TUN_NULL)
+        return tun_fd_handoff_.acknowledge(generation, applied);
+#else
+        (void)generation; (void)applied;
+        return -2;
+#endif
+    }
+    void cancel_tun_handoff() {
+#if defined(OPENVPN_EXTERNAL_TUN_FACTORY) && !defined(_WIN32) && !defined(OPENVPN_FORCE_TUN_NULL)
+        tun_fd_handoff_.cancel();
+#endif
     }
 
     bool tun_snapshot(MYCODEXTunRecords &out) const {
@@ -213,6 +260,9 @@ public:
     }
 
 private:
+#if defined(OPENVPN_EXTERNAL_TUN_FACTORY) && !defined(_WIN32) && !defined(OPENVPN_FORCE_TUN_NULL)
+    MYCODEXTunFDHandoff tun_fd_handoff_;
+#endif
 #if defined(OPENVPN_EXTERNAL_TUN_FACTORY)
     // Keep a strong ref until Core acquires its own intrusive RCPtr. The
     // builder holds a non-owning pointer back to this OpenVPNClient.
@@ -323,6 +373,7 @@ extern "C" void mycodex_client_destroy(mycodex_client_handle *handle) {
             active = handle->run_state == 2 || handle->run_state == 3 || handle->run_state == 4;
             if (active) handle->run_state = 4;
         }
+        handle->client->cancel_tun_handoff();
         if (active) handle->client->stop();
         if (handle->worker.joinable()) handle->worker.join();
     } catch (...) {
@@ -456,7 +507,10 @@ extern "C" int32_t mycodex_client_request_stop(mycodex_client_handle *handle) {
             active = handle->run_state == 2 || handle->run_state == 3;
             if (active) handle->run_state = 4;
         }
-        if (active) handle->client->stop();
+        if (active) {
+            handle->client->cancel_tun_handoff();
+            handle->client->stop();
+        }
         return 0; // idempotent, including before start and after stop
     } catch (...) { return -3; }
 #else
@@ -588,6 +642,55 @@ extern "C" void mycodex_tun_snapshot_destroy(mycodex_tun_snapshot *snapshot) {
     delete snapshot;
 }
 
+/* FD handoff: can be called from the Provider side while Core worker is
+ * blocked inside tun_builder_establish(). All borrowed handles must remain
+ * valid until the call returns. destroy must be serialized with these calls.
+ */
+extern "C" int32_t mycodex_client_tun_attach_fd(mycodex_client_handle *handle, int32_t fd) {
+    if (!handle || fd < 0) return -1;
+#if defined(MYCODEX_WITH_OPENVPN3) && defined(OPENVPN_EXTERNAL_TUN_FACTORY) && !defined(OPENVPN_FORCE_TUN_NULL) && !defined(_WIN32)
+    try {
+        std::lock_guard<std::mutex> lock(handle->lifecycle_mutex);
+        if (!handle->configured || handle->run_started) return -4;
+        return handle->client->attach_tun_fd(fd);
+    } catch (...) { return -3; }
+#else
+    return -2;
+#endif
+}
+
+extern "C" int32_t mycodex_client_tun_wait_pending(mycodex_client_handle *handle,
+                                                     uint32_t timeout_ms, uint64_t *generation) {
+    if (!handle || !generation || timeout_ms > 30000) return -1;
+#if defined(MYCODEX_WITH_OPENVPN3) && defined(OPENVPN_EXTERNAL_TUN_FACTORY) && !defined(OPENVPN_FORCE_TUN_NULL) && !defined(_WIN32)
+    try { return handle->client->wait_tun_pending(timeout_ms, *generation); }
+    catch (...) { return -3; }
+#else
+    return -2;
+#endif
+}
+
+extern "C" int32_t mycodex_client_tun_ack_settings(mycodex_client_handle *handle,
+                                                    uint64_t generation, int32_t applied) {
+    if (!handle || generation == 0 || (applied != 0 && applied != 1)) return -1;
+#if defined(MYCODEX_WITH_OPENVPN3) && defined(OPENVPN_EXTERNAL_TUN_FACTORY) && !defined(OPENVPN_FORCE_TUN_NULL) && !defined(_WIN32)
+    try { return handle->client->ack_tun_settings(generation, applied == 1); }
+    catch (...) { return -3; }
+#else
+    return -2;
+#endif
+}
+
+extern "C" int32_t mycodex_client_tun_cancel(mycodex_client_handle *handle) {
+    if (!handle) return -1;
+#if defined(MYCODEX_WITH_OPENVPN3) && defined(OPENVPN_EXTERNAL_TUN_FACTORY) && !defined(OPENVPN_FORCE_TUN_NULL) && !defined(_WIN32)
+    try { handle->client->cancel_tun_handoff(); return 0; }
+    catch (...) { return -3; }
+#else
+    return -2;
+#endif
+}
+
 // Compiled only in the separate macOS native test library. Never expose
 // synthetic pushed settings in production or enable the real tunnel flag.
 #if defined(MYCODEX_TUN_CAPTURE_TESTING) && defined(MYCODEX_WITH_OPENVPN3)
@@ -643,5 +746,60 @@ extern "C" int32_t mycodex_external_tun_factory_test_fixture(mycodex_client_hand
         if (handle->client->tun_builder_establish() != -1) return -3;
         return 0;
     } catch (...) { return -4; }
+}
+#endif
+
+#if defined(MYCODEX_TUN_FD_TESTING) && defined(MYCODEX_WITH_OPENVPN3) && defined(OPENVPN_EXTERNAL_TUN_FACTORY) && !defined(OPENVPN_FORCE_TUN_NULL) && !defined(_WIN32)
+// Real OpenVPNClient::tun_builder_establish() callback, but a synthetic
+// configuration and a local socketpair. Never invokes connect() or the OS TUN.
+extern "C" int32_t mycodex_client_tun_fd_test_fixture(mycodex_client_handle *handle) {
+    if (!handle || !handle->configured) return -1;
+    int fds[2] = {-1, -1};
+    if (::socketpair(AF_UNIX, SOCK_DGRAM, 0, fds) != 0) return -2;
+    const int old = ::fcntl(fds[0], F_GETFL, 0);
+    if (old < 0 || ::fcntl(fds[0], F_SETFL, old | O_NONBLOCK) != 0) {
+        ::close(fds[0]); ::close(fds[1]);
+        return -2;
+    }
+    const int32_t attached = mycodex_client_tun_attach_fd(handle, fds[0]);
+    ::close(fds[0]);
+    if (attached != 0) { ::close(fds[1]); return -3; }
+    auto &client = *handle->client;
+    if (!client.tun_builder_new() ||
+        !client.tun_builder_set_remote_address("198.51.100.40", false) ||
+        !client.tun_builder_add_address("10.17.0.2", 24, "", false, false) ||
+        !client.tun_builder_set_mtu(1400)) {
+        client.cancel_tun_handoff();
+        ::close(fds[1]);
+        return -4;
+    }
+    int received_fd = -1;
+    std::thread builder([&]() { received_fd = client.tun_builder_establish(); });
+    uint64_t generation = 0;
+    const int32_t pending = mycodex_client_tun_wait_pending(handle, 3000, &generation);
+    if (pending != 1 || generation == 0) {
+        client.cancel_tun_handoff(); builder.join(); ::close(fds[1]);
+        return -5;
+    }
+    MYCODEXTunRecords records;
+    const bool captured = client.tun_snapshot(records) && records.size() == 3;
+    const int32_t stale = mycodex_client_tun_ack_settings(handle, generation + 1, 1);
+    const int32_t ack = mycodex_client_tun_ack_settings(handle, generation, 1);
+    builder.join();
+    if (!captured || stale != -4 || ack != 0 || received_fd < 0) {
+        if (received_fd >= 0) ::close(received_fd);
+        ::close(fds[1]);
+        return -6;
+    }
+    const unsigned char packet[20] = {0x45};
+    unsigned char incoming[64]{};
+    const ssize_t send_result = ::send(fds[1], packet, sizeof(packet), 0);
+    const ssize_t read_result = ::recv(received_fd, incoming, sizeof(incoming), MSG_DONTWAIT);
+    const bool correct = send_result == static_cast<ssize_t>(sizeof(packet)) &&
+        read_result == static_cast<ssize_t>(sizeof(packet)) &&
+        std::memcmp(packet, incoming, sizeof(packet)) == 0;
+    ::close(received_fd);
+    ::close(fds[1]);
+    return correct ? 0 : -7;
 }
 #endif
