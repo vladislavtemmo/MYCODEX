@@ -2,7 +2,7 @@
 
 **Статус: этап 1 — Swift Package и проверяемый C++-мост. VPN-движок ещё не подключён.**
 
-MYCODEX — проект поддерживаемого SDK с публичным Swift API и интеграцией OpenVPN 3 Core в приложения Apple через `NetworkExtension`. Это функциональная замена по назначению, а не копия прекратившего развитие [OpenVPNAdapter](https://github.com/ss-abramchuk/OpenVPNAdapter).
+OpenVPNAdapte-for-Apple — проект поддерживаемого SDK с публичным Swift API и интеграцией OpenVPN 3 Core в приложения Apple через `NetworkExtension`. Это функциональная замена по назначению, а не копия прекратившего развитие [OpenVPNAdapter](https://github.com/ss-abramchuk/OpenVPNAdapter).
 
 ## Целевые платформы
 
