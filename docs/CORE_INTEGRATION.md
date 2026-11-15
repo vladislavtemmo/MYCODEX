@@ -46,3 +46,18 @@ Upstream использует C++20. Старый OpenVPNAdapter включал 
 - Предварительная оценка зависимостей: [DEPENDENCY_AUDIT.md](DEPENDENCY_AUDIT.md).
 
 **Критичный следующий рубеж:** записать фактические Xcode/CMake build artifacts на Mac, затем подключать код к `COpenVPNBridge` и реализовывать `TunBuilderBase`. До этого `mycodex_bridge_core_linked()` должен возвращать 0.
+
+
+## OpenVPNClient 8.2 — ограниченная API-подготовка событий и credentials
+
+- Credentials передаются в OpenVPN 3 Core через `provide_creds()` исключительно
+  после `eval_config()`. C API сообщает статус, **не** печатает Core message.
+  Swift `String` не обеспечивает гарантированного обнуления памяти: для
+  production потребуется Keychain-backed решение и минимизация копий.
+- Очередь Core Event содержит **только** имена и биты error/fatal (без info,
+  логов, IP или токенов), максимум 64, с вытеснением старых.
+- `pollEvent()` не инициирует подключение; до `connect()` очередь пуста.
+- C ABI операции с одним handle сериализуются вызывающим, включая destroy.
+  После внедрения worker-thread lifecycle эта модель должна быть пересмотрена.
+- Тесты в этой версии проверяют передачу credentials в Core и пустую очередь;
+  фактические события будут тестироваться только с реальным соединением.

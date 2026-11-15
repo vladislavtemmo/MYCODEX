@@ -146,3 +146,18 @@
 - Повторная сборка C++: ninja no work to do; Swift integration test PASS.
 - Ограничения: реальная VPN-сессия и NetworkExtension ещё не реализованы.
 - Следующий этап: OpenVPNClient и управление жизненным циклом соединения.
+
+## 2026-11-15 — OpenVPNClient 8.2: credentials + ограниченная очередь событий
+
+- Ветка для интеграции: feat/apple-core-integration (после 6d5d547).
+- C ABI: `mycodex_client_provide_credentials()` с проверкой аргументов,
+  обязательной успешной конфигурацией и очисткой временной C++ копии пароля.
+- `MYCODEXNativeClient::event()` хранит только тип, флаги error/fatal,
+  не записывает `Event.info` и логи; очередь до 64 событий, mutex для polling.
+- Swift: `provideCredentials(username:password:)`, `pollEvent()`,
+  `OpenVPNClientEvent`, типизированная ошибка `credentialsRejected`.
+- Обновлены macOS probe и Windows DLL exports; исходные C ABI функции сохраняются.
+- Эта запись описывает реализацию до фактической macOS/Windows проверки;
+  **реальные события, соединение, TLS, NetworkExtension не проверены**.
+- Перед публикацией выполнить `swift test`, `swift build -c release`,
+  `bash scripts/test-macos-swift-client.sh` на Mac Intel, затем Windows regression.
