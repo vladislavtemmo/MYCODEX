@@ -21,7 +21,9 @@ struct Pair {
 void test_approved() {
     Pair pair;
     MYCODEXTunFDHandoff gate;
+    assert(!gate.has_staged_fd());
     assert(gate.stage(pair.fd[0]) == 0);
+    assert(gate.has_staged_fd());
     uint64_t gen = 0;
     assert(gate.wait_pending(0, gen) == 0);
     int corefd = -4;
@@ -32,6 +34,7 @@ void test_approved() {
     assert(gate.acknowledge(gen, true) == -4);
     worker.join();
     assert(corefd >= 0);
+    assert(!gate.has_staged_fd());
     const unsigned char packet[20] = {0x45};
     unsigned char got[32]{};
     assert(send(pair.fd[1], packet, 20, 0) == 20);
@@ -66,6 +69,7 @@ void test_cancel() {
     gate.cancel();
     worker.join();
     assert(corefd == -1);
+    assert(!gate.has_staged_fd());
     assert(gate.wait_pending(0, gen) == -3);
     assert(gate.acknowledge(gen, true) == -4);
     assert(gate.stage(pair.fd[0]) == -4);
@@ -80,6 +84,7 @@ void test_timeout_and_validation() {
     assert(gate.stage(pair.fd[0]) == -4);
     const auto started = std::chrono::steady_clock::now();
     assert(gate.establish(20) == -1);
+    assert(!gate.has_staged_fd());
     const auto elapsed = std::chrono::duration_cast<std::chrono::seconds>(
         std::chrono::steady_clock::now() - started).count();
     assert(elapsed < 2);

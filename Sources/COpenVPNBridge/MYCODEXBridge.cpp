@@ -252,6 +252,14 @@ public:
 #endif
     }
 
+    bool has_staged_tun_fd() const {
+#if defined(OPENVPN_EXTERNAL_TUN_FACTORY) && !defined(_WIN32) && !defined(OPENVPN_FORCE_TUN_NULL)
+        return tun_fd_handoff_.has_staged_fd();
+#else
+        return false;
+#endif
+    }
+
     bool tun_snapshot(MYCODEXTunRecords &out) const {
         std::lock_guard<std::mutex> lock(tun_mutex_);
         if (!tun_ready_) return false;
@@ -458,7 +466,8 @@ extern "C" int32_t mycodex_client_start(mycodex_client_handle *handle) {
     try {
         std::lock_guard<std::mutex> lock(handle->lifecycle_mutex);
         if (!handle->configured || handle->run_started) return -4;
-#if defined(MYCODEX_HAS_APPLE_TUN_ADAPTER) && defined(MYCODEX_PRODUCTION_TUN_TRANSPORT_VERIFIED) && defined(OPENVPN_EXTERNAL_TUN_FACTORY) && !defined(OPENVPN_FORCE_TUN_NULL)
+#if defined(MYCODEX_HAS_APPLE_TUN_ADAPTER) && defined(MYCODEX_PRODUCTION_TUN_TRANSPORT_VERIFIED) && defined(OPENVPN_EXTERNAL_TUN_FACTORY) && !defined(OPENVPN_FORCE_TUN_NULL) && !defined(_WIN32)
+        if (!handle->client->has_staged_tun_fd()) return -6;
         // Only an Apple TUN adapter that actively implements TunBuilderBase may
         // enable this flag. The adapter is not present in the current milestone.
         handle->run_state = 2;
@@ -583,7 +592,7 @@ extern "C" int32_t mycodex_client_wait(mycodex_client_handle *handle) {
 
 /* Diagnostic capability, not a claim of active connection. */
 extern "C" int32_t mycodex_client_tunnel_available(void) {
-#if defined(MYCODEX_WITH_OPENVPN3) && defined(MYCODEX_HAS_APPLE_TUN_ADAPTER) && defined(MYCODEX_PRODUCTION_TUN_TRANSPORT_VERIFIED) && defined(OPENVPN_EXTERNAL_TUN_FACTORY) && !defined(OPENVPN_FORCE_TUN_NULL)
+#if defined(MYCODEX_WITH_OPENVPN3) && defined(MYCODEX_HAS_APPLE_TUN_ADAPTER) && defined(MYCODEX_PRODUCTION_TUN_TRANSPORT_VERIFIED) && defined(OPENVPN_EXTERNAL_TUN_FACTORY) && !defined(OPENVPN_FORCE_TUN_NULL) && !defined(_WIN32)
     return 1;
 #else
     return 0;

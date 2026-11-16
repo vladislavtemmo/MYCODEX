@@ -61,3 +61,7 @@ scripts/test.sh
 - Результаты Linux SwiftPM-тестов не подтверждают совместимость с Apple.
 
 Подробности следующего шага: [CORE_INTEGRATION.md](CORE_INTEGRATION.md).
+
+## Apple extension example (2026-11-16)
+
+`Examples/AppleExtension` содержит Xcode targets PacketTunnelExtension и HostApp. Для extension скрипт генерирует отдельный Swift package с бинарным iOS XCFramework настоящего OpenVPN3 Core; стандартный SwiftPM fallback в него не входит. Provider пока намеренно завершает start ошибкой, потому что transport worker/PacketFlow не подключён. Нативный `start()` требует staged TUN FD перед запуском worker. Production статус Connected остаётся запрещённым до реального события Core. Схема сборки и проверки: [IOS_CORE_LINK.md](IOS_CORE_LINK.md).

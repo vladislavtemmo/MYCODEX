@@ -1,7 +1,8 @@
 # MYCODEX — долговременная память проекта
 
-**Обновлено:** 2026-11-14  
-**Состояние:** SwiftPM и C++20 ABI загружены в GitHub; следующий локальный инкремент v0.3 готовится. Настоящий OpenVPN 3 Core и реальный VPN-туннель ещё не интегрированы.
+**Обновлено:** 2026-11-16
+
+**Состояние:** настоящий OpenVPN 3 Core слинкован в исследовательский iOS PacketTunnelExtension; запуск VPN и реальный трафик ещё не интегрированы.
 
 ## Миссия
 
@@ -67,6 +68,11 @@
 - В этом окружении исходники OpenVPN 3 Core нельзя получить командой Git из-за отсутствия разрешения DNS/сети; тест macOS необходим.
 
 **Следующая задача:** фактическая сборка OpenVPN 3 Core на macOS и проверка лицензирования/зависимостей, затем реальный `TunBuilderBase` и Packet Tunnel Provider. См. `docs/CORE_INTEGRATION.md`, `docs/OPENVPN3_BUILD.md` и `PROGRESS.md`.
+
+## 2026-11-16 — iOS Core link (8.3B2D2D4A)
+- Закреплённый OpenVPN3 SHA `0c1ce172fe918b05463d71e682a0c2f2d8fe7899` собирается в статический iOS arm64 и iOS Simulator x86_64/arm64 XCFramework через `scripts/build-openvpn3-ios-core.sh` с проверяемыми SHA256 зависимостей.
+- Apple extension использует генерируемый отдельный Swift package с бинарным Core-мостом; корневой SwiftPM fallback остаётся для переносимых тестов и в extension не включён.
+- Debug/Release iOS и Simulator extension собраны без подписи; runtime XCTest подтвердил linked Core, External TUN, создание и конфигурацию клиента. Provider по-прежнему fail-closed: `start()` заблокирован до полного транспорта и device test.
 
 
 ## Windows-проверка 2026-11-15

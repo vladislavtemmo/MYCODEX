@@ -13,6 +13,12 @@ public enum OpenVPNNativeBridge {
         mycodex_bridge_core_linked() == 1
     }
 
+    /// Проверяет выбор настоящей External TUN Factory на этапе компиляции Core.
+    /// Это не подтверждение подключения VPN или готовности Apple PacketFlow.
+    public static var isExternalTunFactoryCompiled: Bool {
+        mycodex_external_tun_factory_compiled() == 1
+    }
+
     /// Название фактически доступного backend, без диагностических секретов.
     public static var backendName: String {
         String(cString: mycodex_bridge_backend_name())

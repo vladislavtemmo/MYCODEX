@@ -1,0 +1,48 @@
+name: MYCODEXExtensionExample
+options:
+  bundleIdPrefix: org.mycodex.example
+settings:
+  base:
+    SWIFT_VERSION: 6.0
+    IPHONEOS_DEPLOYMENT_TARGET: 16.0
+    CODE_SIGNING_ALLOWED: NO
+packages:
+  MYCODEX:
+    path: ../../.external/ios-core-package
+targets:
+  HostApp:
+    type: application
+    platform: iOS
+    settings:
+      PRODUCT_BUNDLE_IDENTIFIER: org.mycodex.example.HostApp
+    sources:
+      - HostApp.swift
+    info:
+      path: HostApp-Info.plist
+      properties:
+        CFBundleDisplayName: MYCODEX Example
+    dependencies:
+      - target: PacketTunnelExtension
+        embed: true
+  PacketTunnelExtension:
+    type: app-extension
+    platform: iOS
+    settings:
+      PRODUCT_BUNDLE_IDENTIFIER: org.mycodex.example.HostApp.PacketTunnelExtension
+    sources:
+      - ../PacketTunnelProvider/PacketTunnelProvider.swift
+    info:
+      path: PacketTunnelExtension-Info.plist
+      properties:
+        NSExtension:
+          NSExtensionPointIdentifier: com.apple.networkextension.packet-tunnel
+          NSExtensionPrincipalClass: $(PRODUCT_MODULE_NAME).PacketTunnelProvider
+    dependencies:
+      - package: MYCODEX
+  CoreLinkTests:
+    type: bundle.unit-test
+    platform: iOS
+    sources:
+      - CoreLinkTests.swift
+    dependencies:
+      - package: MYCODEX

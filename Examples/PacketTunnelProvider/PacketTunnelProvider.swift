@@ -6,7 +6,20 @@ import Foundation
 import NetworkExtension
 import MYCODEX
 
-final class PacketTunnelProvider: NEPacketTunnelProvider {
+// Callback NetworkExtension может прийти с любой очереди. Обёртка вызывается
+// на MainActor после однократного завершения операции в lifecycle.
+private final class TunnelCompletion: @unchecked Sendable {
+    let finish: (Error?) -> Void
+    init(_ finish: @escaping (Error?) -> Void) { self.finish = finish }
+}
+
+private final class StopCompletion: @unchecked Sendable {
+    let finish: () -> Void
+    init(_ finish: @escaping () -> Void) { self.finish = finish }
+}
+
+// Изменяемое состояние Provider изолировано MainActor через lifecycle.
+final class PacketTunnelProvider: NEPacketTunnelProvider, @unchecked Sendable {
     @MainActor private let lifecycle = MYCODEXPacketTunnelSessionLifecycle()
 
     private enum StartError: LocalizedError {
@@ -18,11 +31,12 @@ final class PacketTunnelProvider: NEPacketTunnelProvider {
 
     override func startTunnel(options: [String: NSObject]?,
                               completionHandler: @escaping (Error?) -> Void) {
+        let callback = TunnelCompletion(completionHandler)
         // Start/stop callbacks могут приходить не на MainActor; вся работа
         // с состоянием сериализуется на главном акторе.
         Task { @MainActor [weak self] in
             guard let self else {
-                completionHandler(StartError.nativeTransportNotReady)
+                callback.finish(StartError.nativeTransportNotReady)
                 return
             }
             guard let generation = self.lifecycle.begin(
@@ -31,9 +45,9 @@ final class PacketTunnelProvider: NEPacketTunnelProvider {
                     case .success:
                         // Недостижимо в этом fail-closed примере: без реального
                         // Core CONNECTED и PacketFlow нельзя завершать start(nil).
-                        completionHandler(nil)
+                        callback.finish(nil)
                     case .failure:
-                        completionHandler(StartError.nativeTransportNotReady)
+                        callback.finish(StartError.nativeTransportNotReady)
                     }
                 },
                 onDisconnection: { [weak self] _ in
@@ -41,17 +55,25 @@ final class PacketTunnelProvider: NEPacketTunnelProvider {
                 }
             ) else { return }
 
-            // Единственная доступная сейчас ветка. Не вызывать Core.start(),
-            // не имитировать ACK, пакетный транспорт или CONNECTED.
+            // Проверка заставляет именно extension слинковать настоящий Core.
+            // Созданный клиент не запускает worker и не создаёт VPN-сессию.
+            guard OpenVPNNativeBridge.isOpenVPNCoreLinked,
+                  OpenVPNNativeBridge.isExternalTunFactoryCompiled,
+                  (try? OpenVPNClient()) != nil else {
+                _ = self.lifecycle.fail(generation: generation, reason: .nativeTunnelUnavailable)
+                return
+            }
+            // Транспорт ещё не подключён. Не имитировать ACK или CONNECTED.
             _ = self.lifecycle.fail(generation: generation, reason: .nativeTunnelUnavailable)
         }
     }
 
     override func stopTunnel(with reason: NEProviderStopReason,
                              completionHandler: @escaping () -> Void) {
+        let callback = StopCompletion(completionHandler)
         Task { @MainActor [weak self] in
-            guard let self else { completionHandler(); return }
-            guard let token = self.lifecycle.requestStop(completion: { completionHandler() }) else {
+            guard let self else { callback.finish(); return }
+            guard let token = self.lifecycle.requestStop(completion: { callback.finish() }) else {
                 return
             }
             // В ЭТОМ примере Core worker никогда не создаётся, а PacketFlow
