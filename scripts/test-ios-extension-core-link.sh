@@ -20,10 +20,18 @@ for variant in Debug-iphonesimulator Debug-iphoneos Release-iphonesimulator Rele
     for arch in $(xcrun lipo -archs "$executable"); do
         symbols="$(xcrun nm -arch "$arch" -gU "$executable")"
         for symbol in mycodex_bridge_core_linked mycodex_external_tun_factory_compiled \
-                      mycodex_client_create mycodex_client_configure mycodex_client_start; do
+                      mycodex_client_create mycodex_client_configure mycodex_client_start \
+                      mycodex_client_tun_attach_fd mycodex_client_tun_wait_pending; do
             count="$(printf '%s\n' "$symbols" | grep -Ec " _${symbol}$" || true)"
             [[ "$count" == 1 ]] || { echo "Expected one $symbol in $variant/$arch; found $count" >&2; exit 1; }
         done
+        demangled="$(xcrun nm -arch "$arch" -gU "$executable" | xcrun swift-demangle)"
+        grep -q 'MYCODEXApplePacketTunnelSessionController.start(profileText:' <<< "$demangled" || {
+            echo "Session controller missing: $variant/$arch" >&2; exit 1;
+        }
+        grep -q 'MYCODEXAppleOpenVPNRuntime.joinWorker()' <<< "$demangled" || {
+            echo "Native worker orchestration missing: $variant/$arch" >&2; exit 1;
+        }
     done
     if xcrun otool -L "$executable" | grep -Eq '/usr/local/|/opt/homebrew/|libmycodex_core\.dylib'; then
         echo "macOS/Homebrew library linked into $variant" >&2

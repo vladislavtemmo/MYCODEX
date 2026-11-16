@@ -1,13 +1,10 @@
-// Пример NSExtensionPrincipalClass для подписанного Packet Tunnel Extension.
-// Это намеренно fail-closed, потому что production Core start() ещё возвращает
-// -6: подписанный NetworkExtension и сквозной VPN-трафик не проверены.
+// NSExtensionPrincipalClass for the signed Packet Tunnel Extension.
+// Native start() remains guarded by -6 until the production TUN transport is verified.
 #if canImport(NetworkExtension)
 import Foundation
 import NetworkExtension
 import MYCODEX
 
-// Callback NetworkExtension может прийти с любой очереди. Обёртка вызывается
-// на MainActor после однократного завершения операции в lifecycle.
 private final class TunnelCompletion: @unchecked Sendable {
     let finish: (Error?) -> Void
     init(_ finish: @escaping (Error?) -> Void) { self.finish = finish }
@@ -18,10 +15,7 @@ private final class StopCompletion: @unchecked Sendable {
     init(_ finish: @escaping () -> Void) { self.finish = finish }
 }
 
-// Изменяемое состояние Provider изолировано MainActor через lifecycle.
 final class PacketTunnelProvider: NEPacketTunnelProvider, @unchecked Sendable {
-    @MainActor private let lifecycle = MYCODEXPacketTunnelSessionLifecycle()
-
     private enum StartError: LocalizedError {
         case nativeTransportNotReady
         var errorDescription: String? {
@@ -29,42 +23,55 @@ final class PacketTunnelProvider: NEPacketTunnelProvider, @unchecked Sendable {
         }
     }
 
+    @MainActor private var sessionController: MYCODEXApplePacketTunnelSessionController?
+
+    @MainActor private func controller() -> MYCODEXApplePacketTunnelSessionController {
+        if let sessionController { return sessionController }
+        let controller = MYCODEXApplePacketTunnelSessionController(
+            makeRuntime: { [weak self] profile, credentials, generation in
+            guard let self else { throw StartError.nativeTransportNotReady }
+            return try await MYCODEXAppleOpenVPNRuntime.prepare(
+                profile: profile, credentials: credentials, provider: self,
+                onFailure: { [weak self] in self?.sessionController?.transportDidFail(generation: generation) }
+            )
+            },
+            onDisconnection: { [weak self] _ in
+                self?.cancelTunnelWithError(StartError.nativeTransportNotReady)
+            }
+        )
+        sessionController = controller
+        return controller
+    }
+
     override func startTunnel(options: [String: NSObject]?,
                               completionHandler: @escaping (Error?) -> Void) {
         let callback = TunnelCompletion(completionHandler)
-        // Start/stop callbacks могут приходить не на MainActor; вся работа
-        // с состоянием сериализуется на главном акторе.
+        // Read the non-Sendable options before crossing to MainActor. Never log
+        // profile material, credentials, certificates, or private keys.
+        let configuration = (protocolConfiguration as? NETunnelProviderProtocol)?.providerConfiguration
+        let profileText = (options?["ovpnProfile"] as? String) ?? (configuration?["ovpnProfile"] as? String)
+        let username = (options?["username"] as? String) ?? (configuration?["username"] as? String)
+        let password = (options?["password"] as? String) ?? (configuration?["password"] as? String)
+        let credentials: MYCODEXAppleTunnelCredentials?
+        if let username, let password {
+            credentials = MYCODEXAppleTunnelCredentials(username: username, password: password)
+        } else {
+            credentials = nil
+        }
+        let incompleteCredentials = (username == nil) != (password == nil)
         Task { @MainActor [weak self] in
-            guard let self else {
+            guard let self, !incompleteCredentials,
+                  OpenVPNNativeBridge.isOpenVPNCoreLinked,
+                  OpenVPNNativeBridge.isExternalTunFactoryCompiled else {
                 callback.finish(StartError.nativeTransportNotReady)
                 return
             }
-            guard let generation = self.lifecycle.begin(
-                completion: { result in
-                    switch result {
-                    case .success:
-                        // Недостижимо в этом fail-closed примере: без реального
-                        // Core CONNECTED и PacketFlow нельзя завершать start(nil).
-                        callback.finish(nil)
-                    case .failure:
-                        callback.finish(StartError.nativeTransportNotReady)
-                    }
-                },
-                onDisconnection: { [weak self] _ in
-                    self?.cancelTunnelWithError(StartError.nativeTransportNotReady)
+            self.controller().start(profileText: profileText, credentials: credentials) { result in
+                switch result {
+                case .success: callback.finish(nil)
+                case .failure: callback.finish(StartError.nativeTransportNotReady)
                 }
-            ) else { return }
-
-            // Проверка заставляет именно extension слинковать настоящий Core.
-            // Созданный клиент не запускает worker и не создаёт VPN-сессию.
-            guard OpenVPNNativeBridge.isOpenVPNCoreLinked,
-                  OpenVPNNativeBridge.isExternalTunFactoryCompiled,
-                  (try? OpenVPNClient()) != nil else {
-                _ = self.lifecycle.fail(generation: generation, reason: .nativeTunnelUnavailable)
-                return
             }
-            // Транспорт ещё не подключён. Не имитировать ACK или CONNECTED.
-            _ = self.lifecycle.fail(generation: generation, reason: .nativeTunnelUnavailable)
         }
     }
 
@@ -73,16 +80,8 @@ final class PacketTunnelProvider: NEPacketTunnelProvider, @unchecked Sendable {
         let callback = StopCompletion(completionHandler)
         Task { @MainActor [weak self] in
             guard let self else { callback.finish(); return }
-            guard let token = self.lifecycle.requestStop(completion: { callback.finish() }) else {
-                return
-            }
-            // В ЭТОМ примере Core worker никогда не создаётся, а PacketFlow
-            // никогда не запускается. Поэтому отсутствующие ресурсы могут
-            // завершить обе фазы без блокирующего join. В реальном Provider:
-            // 1) native cancel+stop, 2) join на фоне, 3) stopMonitoring,
-            // 4) close socket/bridge, 5) resourcesDidRelease.
-            guard self.lifecycle.coreWorkerDidJoin(stopToken: token) else { return }
-            _ = self.lifecycle.resourcesDidRelease(stopToken: token)
+            guard let controller = self.sessionController else { callback.finish(); return }
+            controller.stop { callback.finish() }
         }
     }
 }
