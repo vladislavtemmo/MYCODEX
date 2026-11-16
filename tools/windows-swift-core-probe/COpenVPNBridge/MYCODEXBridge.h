@@ -44,7 +44,8 @@ int32_t mycodex_client_poll_event(mycodex_client_handle *handle,
 /* Lifecycle: run state describes the Core worker, NOT VPN connectivity.
  * 0=new, 1=configured, 2=starting, 3=worker running, 4=stopping,
  * 5=stopped, 6=failed. A CONNECTED Core event is required to claim VPN.
- * Start returns -6 while the real PacketTunnel/TunBuilder adapter is absent.
+ * Start returns -6 while the real PacketTunnel/TunBuilder adapter is absent,
+ * or when no validated native TUN socket FD has been staged for this client.
  * Other error codes: -1 arguments, -2 Core unavailable, -3 exception,
  * -4 invalid state. stop is idempotent and nonblocking; wait and destroy
  * can block. Serialize all external operations and destruction on a handle.

@@ -25,6 +25,8 @@ public final class MYCODEXApplePacketTransportDriver {
     private var active = false
     private var pumping = false
     private var outputBlocked = false
+    private var cancelledSources = 0
+    private var cancellationWaiter: CheckedContinuation<Void, Never>?
 
     public init(bridge: MYCODEXPacketBridge,
                 transport: MYCODEXTunSocketTransport,
@@ -48,8 +50,14 @@ public final class MYCODEXApplePacketTransportDriver {
         // only AFTER its cancellation handler executes.
         let reader = DispatchSource.makeReadSource(fileDescriptor: readFD, queue: .main)
         let writer = DispatchSource.makeWriteSource(fileDescriptor: writeFD, queue: .main)
-        reader.setCancelHandler { _ = Darwin.close(readFD) }
-        writer.setCancelHandler { _ = Darwin.close(writeFD) }
+        reader.setCancelHandler { [weak self] in
+            _ = Darwin.close(readFD)
+            MainActor.assumeIsolated { self?.sourceDidCancel() }
+        }
+        writer.setCancelHandler { [weak self] in
+            _ = Darwin.close(writeFD)
+            MainActor.assumeIsolated { self?.sourceDidCancel() }
+        }
         self.readSource = reader
         self.writeSource = writer
 
@@ -122,6 +130,23 @@ public final class MYCODEXApplePacketTransportDriver {
         }
         readSource = nil
         writeSource = nil
+    }
+
+    /// Wait for both owned monitor descriptors to close before the owner
+    /// closes the socketpair and reports stopTunnel completion.
+    public func stopMonitoringAndWait() async {
+        stopMonitoring()
+        if cancelledSources < 2 {
+            await withCheckedContinuation { cancellationWaiter = $0 }
+        }
+    }
+
+    private func sourceDidCancel() {
+        cancelledSources += 1
+        if cancelledSources == 2 {
+            cancellationWaiter?.resume()
+            cancellationWaiter = nil
+        }
     }
 
     private func readable() {
