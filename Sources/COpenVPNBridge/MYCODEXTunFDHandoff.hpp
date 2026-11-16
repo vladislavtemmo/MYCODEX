@@ -23,6 +23,11 @@ public:
     MYCODEXTunFDHandoff(const MYCODEXTunFDHandoff &) = delete;
     MYCODEXTunFDHandoff &operator=(const MYCODEXTunFDHandoff &) = delete;
 
+    bool has_staged_fd() const {
+        std::lock_guard<std::mutex> lock(mutex_);
+        return !cancelled_ && staged_fd_ >= 0;
+    }
+
     // Borrowed input descriptor. Validates AF_UNIX / SOCK_DGRAM and duplicates
     // it with CLOEXEC. The caller retains ownership of the input FD.
     // 0=accepted, -1=invalid fd/type, -3=dup/fcntl failure, -4=state.
@@ -130,7 +135,7 @@ private:
         }
     }
 
-    std::mutex mutex_;
+    mutable std::mutex mutex_;
     std::condition_variable cv_;
     int staged_fd_ = -1;
     uint64_t generation_ = 0;

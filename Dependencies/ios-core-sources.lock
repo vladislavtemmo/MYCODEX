@@ -1,0 +1,9 @@
+# Архивы исходников для воспроизводимой iOS-сборки, без macOS Homebrew libraries.
+openssl_version=3.5.9
+openssl_sha256=603f5602e2eef00d77fbd429d34dcd5822bb301757a1bc9cdb24c670f1eb859a
+fmt_version=12.2.1
+fmt_sha256=870a49acec5bcdab236aeea834ebd7f0b8548a7d8cea33c996b6873a37f2d50c
+lz4_version=1.11.1
+lz4_sha256=683fed08a844ad012196381e40badf80c0bbe4962959761416d41c9e67d77ec7
+asio_version=1.38.2
+asio_sha256=c04e0e66ac29741faad763a56f3c50196421d4b968009fc237c53314769bf8ad

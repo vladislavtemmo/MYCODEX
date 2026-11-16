@@ -26,6 +26,8 @@
 ## Этап 2 — первый реальный туннель
 
 - [ ] Приложение-пример и Packet Tunnel Provider с entitlement.
+- [x] iOS Simulator HostApp и PacketTunnelExtension target компилируются без подписи; Provider пока fail-closed, entitlement и device test не выполнены (2026-11-16).
+- [x] Исследовательская сборка закреплённого Core для iOS arm64 и Simulator, отдельный бинарный package без fallback, runtime-тест конфигурации и проверка символов extension; VPN-транспорт пока не завершён (8.3B2D2D4A).
 - [ ] Подключение/отключение, отмена, ошибки и безопасное хранение credentials.
 - [ ] UDP/TCP на реальных OpenVPN и совместимых SoftEther-серверах.
 - [ ] Проверка DNS/маршрутов/MTU и окончания сессии.
